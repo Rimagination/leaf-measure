@@ -1,0 +1,15 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+
+config/runtime.toml
+dist/
+build/
+*.egg-info/
+
+*.log
+*.tmp
+
+.leaf-measure-assets/

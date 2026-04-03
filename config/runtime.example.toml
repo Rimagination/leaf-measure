@@ -1,0 +1,4 @@
+[runtime]
+fiji_dir = "D:/path/to/Fiji"
+python_exe = "D:/path/to/python.exe"
+assets_dir = "D:/path/to/leaf-measure-assets"

@@ -1,0 +1,8 @@
+interface:
+  display_name: "Leaf Measure"
+  short_description: "Measure leaf traits from image folders with the Fiji-based FAMeLeS workflow."
+  default_prompt: "Use $leaf-fameles to measure leaf area, perimeter, length, width, circularity, and solidity for the images in this folder."
+
+policy:
+  allow_implicit_invocation: true
+

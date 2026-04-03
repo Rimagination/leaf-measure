@@ -1,0 +1,7 @@
+[upstream]
+fameles_figshare_doi = "10.6084/m9.figshare.22354405"
+
+[runtime]
+python = ">=3.11"
+fiji_launcher_mode = "batch"
+
