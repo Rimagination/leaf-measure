@@ -30,7 +30,7 @@ from engine.reporting import (
 )
 from engine.runtime import probe_runtime, repo_root, resolve_runtime
 from engine.sanity import full_image_sanity_warnings, image_area_map
-from engine.skill_sync import sync_all_skills
+from engine.skill_sync import default_skill_install_root, install_skill, sync_all_skills
 from engine.upstream import download_and_extract_fiji, download_and_stage_figshare_assets
 
 
@@ -74,6 +74,14 @@ def parse_args() -> argparse.Namespace:
         help="Sync canonical skills/ into repo-local .agents/ and .claude/ skill directories.",
     )
     sync_skills.add_argument("--repo-root", type=Path)
+
+    install_skill_parser = subparsers.add_parser(
+        "install-skill",
+        help="Install the canonical leaf-fameles skill into a target global skill directory.",
+    )
+    install_skill_parser.add_argument("--repo-root", type=Path)
+    install_skill_parser.add_argument("--skill-name", default="leaf-fameles")
+    install_skill_parser.add_argument("--destination", type=Path)
     return parser.parse_args()
 
 
@@ -446,6 +454,14 @@ def main() -> int:
             synced = sync_all_skills(args.repo_root or repo_root())
             for path in synced:
                 print(path)
+            return 0
+        if args.command == "install-skill":
+            installed = install_skill(
+                args.repo_root or repo_root(),
+                args.skill_name,
+                args.destination or default_skill_install_root(),
+            )
+            print(installed)
             return 0
         raise ValueError(f"Unsupported command: {args.command}")
     except LeafMeasureError as error:

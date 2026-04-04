@@ -7,13 +7,19 @@ description: Use when measuring leaf area, perimeter, length, width, circularity
 
 Use this skill to run the shared `leaf-measure` engine, not to re-implement the method in the prompt.
 
+This skill supports two host patterns:
+
+- repo-local: the current workspace is the `leaf-measure` repository
+- standalone installed skill: the skill lives under `$CODEX_HOME/skills/leaf-fameles` and uses `scripts/setup_and_analyze.py` to clone or update the shared repo cache under `$CODEX_HOME/vendor/leaf-measure`
+
 ## Workflow
 
 1. Confirm the target image folder.
 2. If the user did not specify a mode, explain `Full image` vs `Thumbnails` using `references/mode-selection.md` and ask them to choose.
 3. Before analysis, make sure the runtime exists:
-   - prefer `.\scripts\bootstrap.ps1` on Windows because it installs the current Python dependencies, downloads Fiji if missing, and fetches the public Figshare assets if missing
-   - if only the upstream package is missing, run `python -m engine.cli fetch-assets`
+   - repo-local: prefer `.\scripts\bootstrap.ps1` on Windows because it installs the current Python dependencies, downloads Fiji if missing, and fetches the public Figshare assets if missing
+   - standalone installed skill: run `python scripts/setup_and_analyze.py analyze ...`; that helper clones or updates the shared repo cache, runs `doctor`, and bootstraps the runtime on first use when needed
+   - if only the upstream package is missing in a repo-local workspace, run `python -m engine.cli fetch-assets`
 4. Run the shared CLI from the repository root:
 
 ```powershell
@@ -24,6 +30,18 @@ or
 
 ```powershell
 python -m engine.cli analyze --input "<folder>" --output "<run-dir>" --mode thumbnails
+```
+
+For a standalone installed skill, use the bundled helper instead of assuming the current directory is the repo:
+
+```powershell
+python scripts/setup_and_analyze.py analyze --input "<folder>" --output "<run-dir>" --mode full
+```
+
+or
+
+```powershell
+python scripts/setup_and_analyze.py analyze --input "<folder>" --output "<run-dir>" --mode thumbnails
 ```
 
 5. Read `manifest.json`, `results.csv`, `run_summary.md`, and the output folders before answering.
@@ -47,3 +65,4 @@ python -m engine.cli analyze --input "<folder>" --output "<run-dir>" --mode thum
 - Do not silently convert pixel outputs into physical units.
 - Do not claim the method worked if `results.csv` or output images are missing.
 - Treat the shared CLI as the source of truth.
+- If the standalone helper cannot make the runtime ready, surface the bootstrap or doctor failure clearly instead of improvising.

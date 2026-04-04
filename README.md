@@ -97,6 +97,15 @@ Use leaf-measure to analyze this folder. If I have not specified Full image or T
 - 上游资源 staging 脚本：`scripts/stage-assets.ps1`
 - skill 同步脚本：`scripts/sync-skills.ps1`
 
+如果你不想每次都先打开整个仓库，也可以把 canonical skill 单独安装到全局技能目录：
+
+```powershell
+python -m engine.cli install-skill
+```
+
+默认会安装到 `$CODEX_HOME/skills/leaf-fameles`（未设置 `CODEX_HOME` 时为 `~/.codex/skills/leaf-fameles`）。
+安装后，skill 自带的 `scripts/setup_and_analyze.py` 会在首次运行时把共享仓库克隆或更新到 `$CODEX_HOME/vendor/leaf-measure`，然后自动执行 `doctor` 和 `bootstrap`。
+
 也就是说，对 agent 用户来说，重点不是“先看 pip 怎么装”，而是：
 
 - 仓库能不能被 agent 直接理解
@@ -133,6 +142,12 @@ Run python -m engine.cli fetch-assets, then run leaf-measure with that assets pa
 ```powershell
 python -m engine.cli fetch-assets
 python -m engine.cli analyze --input "<folder>" --output "<run-dir>" --mode full --assets ".\.leaf-measure-assets"
+```
+
+如果你已经把 canonical skill 安装到了全局目录，也可以直接在已安装 skill 目录中让 agent 调这个 helper：
+
+```text
+Run python scripts/setup_and_analyze.py analyze --input "<folder>" --output "<run-dir>" --mode full from the installed leaf-fameles skill directory.
 ```
 
 ### 手动安装
@@ -455,6 +470,15 @@ The repository already gives agents what they need:
 - an upstream-asset staging script: `scripts/stage-assets.ps1`
 - a skill sync script: `scripts/sync-skills.ps1`
 
+If you do not want to open the whole repository every time, you can also install the canonical skill into your global skill directory:
+
+```powershell
+python -m engine.cli install-skill
+```
+
+By default this installs to `$CODEX_HOME/skills/leaf-fameles` (or `~/.codex/skills/leaf-fameles` when `CODEX_HOME` is unset).
+The bundled `scripts/setup_and_analyze.py` helper then clones or updates the shared repo cache under `$CODEX_HOME/vendor/leaf-measure` and runs `doctor` plus `bootstrap` on first use.
+
 For agent-native users, the important thing is not leading with `pip install`, but making sure:
 
 - the repository is understandable to the agent
@@ -491,6 +515,12 @@ Equivalent commands:
 ```powershell
 python -m engine.cli fetch-assets
 python -m engine.cli analyze --input "<folder>" --output "<run-dir>" --mode full --assets ".\.leaf-measure-assets"
+```
+
+If you have already installed the canonical skill globally, you can also tell the agent to run the bundled helper from the installed skill directory:
+
+```text
+Run python scripts/setup_and_analyze.py analyze --input "<folder>" --output "<run-dir>" --mode full from the installed leaf-fameles skill directory.
 ```
 
 ### Manual Installation
