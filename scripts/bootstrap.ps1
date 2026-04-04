@@ -51,6 +51,14 @@ if (-not $SkipInstall) {
     }
 }
 
+Write-Host "Generating repo-local skills from the canonical skills/ directory..."
+Push-Location $RepoRoot
+try {
+    Invoke-Python -CommandArgs @("-m", "engine.cli", "sync-skills", "--repo-root", $RepoRoot)
+} finally {
+    Pop-Location
+}
+
 $assetsRoot = Join-Path $RepoRoot ".leaf-measure-assets"
 $assetsReady = (
     (Test-Path (Join-Path $assetsRoot "macros\original\Fameles_v2_Full_image.ijm")) -and

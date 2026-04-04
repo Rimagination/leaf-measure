@@ -1,7 +1,8 @@
 # leaf-measure
 
 基于已发表 FAMeLeS 方法的叶片形态测量仓库与 Skill。它把 Fiji 宏工作流包装成可由 agent 调用、可在新数据上复用、并且可验证的分析流程。
-这个仓库包含共享 Python engine、canonical skill 源，以及生成到 `.agents` / `.claude` 的 repo-local skills，不是只有一个独立 skill 包。
+这个仓库包含共享 Python engine 和 canonical skill 源，不是只有一个独立 skill 包。
+`.agents/` 与 `.claude/` 下的 repo-local skills 由 `bootstrap` 或 `sync-skills` 在本地生成，不再作为 GitHub 上的长期跟踪目录。
 
 ![leaf-measure cover](docs/assets/cover.jpg)
 
@@ -89,7 +90,7 @@ Use leaf-measure to analyze this folder. If I have not specified Full image or T
 
 - 共享 CLI：`python -m engine.cli analyze ...`
 - canonical skill 源：`skills/leaf-fameles/`
-- 生成的 repo-local skills：
+- 本地生成的 repo-local skills：
   - `.agents/skills/leaf-fameles/`
   - `.claude/skills/leaf-fameles/`
 - 运行时模板：`config/runtime.example.toml`
@@ -105,6 +106,7 @@ python -m engine.cli install-skill
 
 默认会安装到 `$CODEX_HOME/skills/leaf-fameles`（未设置 `CODEX_HOME` 时为 `~/.codex/skills/leaf-fameles`）。
 安装后，skill 自带的 `scripts/setup_and_analyze.py` 会在首次运行时把共享仓库克隆或更新到 `$CODEX_HOME/vendor/leaf-measure`，然后自动执行 `doctor` 和 `bootstrap`。
+如果你打开的是仓库本身，`.\scripts\bootstrap.ps1` 也会自动把 canonical `skills/` 同步到本地 `.agents/` 和 `.claude/`。
 
 也就是说，对 agent 用户来说，重点不是“先看 pip 怎么装”，而是：
 
@@ -387,6 +389,7 @@ python -m pytest tests -q
 
 `leaf-measure` packages the published Fiji-based FAMeLeS workflow into a repo and skill that agents can run on new folders of leaf images.
 It is a shared Python engine plus a canonical skill source, not only a standalone skill package.
+Repo-local `.agents/` and `.claude/` skills are generated locally by `bootstrap` or `sync-skills` rather than kept as permanent tracked directories on GitHub.
 
 ![leaf-measure cover](docs/assets/cover.jpg)
 
@@ -462,7 +465,7 @@ The repository already gives agents what they need:
 
 - a shared CLI: `python -m engine.cli analyze ...`
 - a canonical skill source: `skills/leaf-fameles/`
-- generated repo-local skills:
+- locally generated repo-local skills:
   - `.agents/skills/leaf-fameles/`
   - `.claude/skills/leaf-fameles/`
 - a runtime template: `config/runtime.example.toml`
@@ -478,6 +481,7 @@ python -m engine.cli install-skill
 
 By default this installs to `$CODEX_HOME/skills/leaf-fameles` (or `~/.codex/skills/leaf-fameles` when `CODEX_HOME` is unset).
 The bundled `scripts/setup_and_analyze.py` helper then clones or updates the shared repo cache under `$CODEX_HOME/vendor/leaf-measure` and runs `doctor` plus `bootstrap` on first use.
+If you are working inside the repository itself, `.\scripts\bootstrap.ps1` also syncs the canonical `skills/` directory into local `.agents/` and `.claude/` host directories.
 
 For agent-native users, the important thing is not leading with `pip install`, but making sure:
 
