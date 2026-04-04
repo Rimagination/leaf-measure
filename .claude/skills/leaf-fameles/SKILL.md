@@ -11,7 +11,10 @@ Use this skill to run the shared `leaf-measure` engine, not to re-implement the 
 
 1. Confirm the target image folder.
 2. If the user did not specify a mode, explain `Full image` vs `Thumbnails` using `references/mode-selection.md` and ask them to choose.
-3. Run the shared CLI from the repository root:
+3. Before analysis, make sure the runtime exists:
+   - prefer `.\scripts\bootstrap.ps1` on Windows because it installs the current Python dependencies, downloads Fiji if missing, and fetches the public Figshare assets if missing
+   - if only the upstream package is missing, run `python -m engine.cli fetch-assets`
+4. Run the shared CLI from the repository root:
 
 ```powershell
 python -m engine.cli analyze --input "<folder>" --output "<run-dir>" --mode full
@@ -23,8 +26,8 @@ or
 python -m engine.cli analyze --input "<folder>" --output "<run-dir>" --mode thumbnails
 ```
 
-4. Read `manifest.json`, `results.csv`, `run_summary.md`, and the output folders before answering.
-5. Explain:
+5. Read `manifest.json`, `results.csv`, `run_summary.md`, and the output folders before answering.
+6. Explain:
    - what was measured
    - which mode was used
    - that `results.csv` is the user-facing table and `results_fameles_particles_raw.csv` preserves the original particle-level table when present

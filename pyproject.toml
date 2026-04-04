@@ -16,6 +16,7 @@ dependencies = [
   "numpy>=1.26",
   "pandas>=2.2",
   "Pillow>=10.0",
+  "requests>=2.32",
   "scipy>=1.13",
 ]
 

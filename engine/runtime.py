@@ -147,7 +147,8 @@ def resolve_runtime(
         raise FileNotFoundError(
             "Could not resolve leaf-measure assets. Provide --assets, set "
             "config/runtime.toml, set LEAF_MEASURE_ASSETS_DIR, or stage upstream assets "
-            "into .leaf-measure-assets/."
+            "into .leaf-measure-assets/. You can also run "
+            "`python -m engine.cli fetch-assets` to download the public Figshare package."
         )
 
     return ResolvedRuntime(

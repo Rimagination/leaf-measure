@@ -91,7 +91,7 @@ Use leaf-measure to analyze this folder. If I have not specified Full image or T
   - `.agents/skills/leaf-fameles/`
   - `.claude/skills/leaf-fameles/`
 - 运行时模板：`config/runtime.example.toml`
-- bootstrap 脚本：`scripts/bootstrap.ps1`
+- 自动 bootstrap 脚本：`scripts/bootstrap.ps1`
 - 上游资源 staging 脚本：`scripts/stage-assets.ps1`
 
 也就是说，对 agent 用户来说，重点不是“先看 pip 怎么装”，而是：
@@ -101,7 +101,13 @@ Use leaf-measure to analyze this folder. If I have not specified Full image or T
 - 运行时能不能自动探测
 - 结果是不是结构化输出
 
-如果 agent 没有自动找到 Fiji，直接让它继续做下面这件事就行：
+推荐先让 agent 直接运行：
+
+```text
+Run .\scripts\bootstrap.ps1 to install Python dependencies for the current environment, download Fiji if it is missing, and fetch the public Figshare assets if they are missing.
+```
+
+如果你只想补齐其中一项，也可以继续让 agent 做下面这些事：
 
 ```text
 Search this machine for fiji-windows-x64.exe, then run leaf-measure with that Fiji path.
@@ -113,16 +119,16 @@ Search this machine for fiji-windows-x64.exe, then run leaf-measure with that Fi
 python -m engine.cli analyze --input "<folder>" --output "<run-dir>" --mode full --fiji "D:\path\to\Fiji"
 ```
 
-如果公开发布版本不再随仓库打包 FAMeLeS 宏和试验数据，先让 agent 做这件事：
+如果只缺上游宏和试验包，先让 agent 做这件事：
 
 ```text
-Stage the upstream FAMeLeS package into .leaf-measure-assets, then run leaf-measure with that assets path.
+Run python -m engine.cli fetch-assets, then run leaf-measure with that assets path.
 ```
 
 对应命令：
 
 ```powershell
-.\scripts\stage-assets.ps1 -SourceRoot "<downloaded-or-extracted-upstream-package>"
+python -m engine.cli fetch-assets
 python -m engine.cli analyze --input "<folder>" --output "<run-dir>" --mode full --assets ".\.leaf-measure-assets"
 ```
 
@@ -143,7 +149,19 @@ cd leaf-measure
 cd D:\path\to\leaf-measure
 ```
 
-#### 2. 创建 Python 环境并安装依赖
+#### 2. 最简单的安装方式
+
+```powershell
+.\scripts\bootstrap.ps1
+```
+
+它会：
+
+- 在当前 Python 环境中安装 `leaf-measure`
+- 如果本地缺少 Fiji，就从官方地址下载
+- 如果本地缺少上游宏和 `Trial.zip`，就从论文指向的 Figshare 资源页拉取并 stage 到 `.leaf-measure-assets/`
+
+#### 3. 手动创建 Python 环境并安装依赖
 
 ```powershell
 python -m venv .venv
@@ -152,14 +170,20 @@ python -m pip install -U pip
 python -m pip install -e .[dev]
 ```
 
-#### 3. 准备 Fiji
+#### 4. 手动准备 Fiji
 
 你需要本地 Fiji 安装。推荐做法：
 
 - 直接把 Fiji 放到仓库旁边或仓库内，便于自动发现
 - 或者在 `config/runtime.toml` / `FIJI_DIR` 中显式指定路径
 
-#### 4. 生成本地运行时配置
+你也可以单独自动下载：
+
+```powershell
+python -m engine.cli fetch-fiji
+```
+
+#### 5. 生成本地运行时配置
 
 ```powershell
 Copy-Item config\runtime.example.toml config\runtime.toml
@@ -171,7 +195,13 @@ Copy-Item config\runtime.example.toml config\runtime.toml
 .\scripts\bootstrap.ps1
 ```
 
-#### 5. 如果上游资源未随仓库分发，先做资源 staging
+#### 6. 如果只想单独准备上游资源
+
+```powershell
+python -m engine.cli fetch-assets
+```
+
+如果你已经手动下载并解压了上游包，也可以继续使用本地 staging：
 
 ```powershell
 .\scripts\stage-assets.ps1 -SourceRoot "<downloaded-or-extracted-upstream-package>"
@@ -409,7 +439,7 @@ The repository already gives agents what they need:
   - `.agents/skills/leaf-fameles/`
   - `.claude/skills/leaf-fameles/`
 - a runtime template: `config/runtime.example.toml`
-- a bootstrap script: `scripts/bootstrap.ps1`
+- an automatic bootstrap script: `scripts/bootstrap.ps1`
 - an upstream-asset staging script: `scripts/stage-assets.ps1`
 
 For agent-native users, the important thing is not leading with `pip install`, but making sure:
@@ -419,7 +449,13 @@ For agent-native users, the important thing is not leading with `pip install`, b
 - runtime resolution is explicit
 - outputs are structured
 
-If the agent does not auto-detect Fiji, tell it to continue with:
+The recommended first step for an agent is:
+
+```text
+Run .\scripts\bootstrap.ps1 to install Python dependencies for the current environment, download Fiji if it is missing, and fetch the public Figshare assets if they are missing.
+```
+
+If you only want to override one missing component, tell the agent to continue with:
 
 ```text
 Search this machine for fiji-windows-x64.exe, then run leaf-measure with that Fiji path.
@@ -431,16 +467,16 @@ The most direct override is:
 python -m engine.cli analyze --input "<folder>" --output "<run-dir>" --mode full --fiji "D:\path\to\Fiji"
 ```
 
-If the public release no longer bundles upstream FAMeLeS assets, tell the agent to do this first:
+If the run only needs the public upstream macros and trial package, tell the agent to do this first:
 
 ```text
-Stage the upstream FAMeLeS package into .leaf-measure-assets, then run leaf-measure with that assets path.
+Run python -m engine.cli fetch-assets, then run leaf-measure with that assets path.
 ```
 
 Equivalent commands:
 
 ```powershell
-.\scripts\stage-assets.ps1 -SourceRoot "<downloaded-or-extracted-upstream-package>"
+python -m engine.cli fetch-assets
 python -m engine.cli analyze --input "<folder>" --output "<run-dir>" --mode full --assets ".\.leaf-measure-assets"
 ```
 
@@ -461,7 +497,19 @@ If you are still working locally and do not have a published repository URL yet,
 cd D:\path\to\leaf-measure
 ```
 
-#### 2. Create a Python environment and install dependencies
+#### 2. Easiest install path
+
+```powershell
+.\scripts\bootstrap.ps1
+```
+
+It will:
+
+- install `leaf-measure` into the current Python environment
+- download Fiji from the official distribution if it is missing
+- fetch the public Figshare macros and `Trial.zip` if they are missing, then stage them into `.leaf-measure-assets/`
+
+#### 3. Manual Python environment and dependency install
 
 ```powershell
 python -m venv .venv
@@ -470,14 +518,20 @@ python -m pip install -U pip
 python -m pip install -e .[dev]
 ```
 
-#### 3. Prepare Fiji
+#### 4. Manual Fiji setup
 
 You need a local Fiji installation. Recommended options:
 
 - place Fiji inside or near the repository so discovery can find it
 - or set the path explicitly via `config/runtime.toml` or `FIJI_DIR`
 
-#### 4. Create a local runtime config
+You can also download Fiji directly:
+
+```powershell
+python -m engine.cli fetch-fiji
+```
+
+#### 5. Create a local runtime config
 
 ```powershell
 Copy-Item config\runtime.example.toml config\runtime.toml
@@ -489,7 +543,13 @@ or:
 .\scripts\bootstrap.ps1
 ```
 
-#### 5. If upstream assets are not bundled, stage them first
+#### 6. If you only want to prepare upstream assets
+
+```powershell
+python -m engine.cli fetch-assets
+```
+
+If you already downloaded and extracted the upstream package yourself, the local staging path still works:
 
 ```powershell
 .\scripts\stage-assets.ps1 -SourceRoot "<downloaded-or-extracted-upstream-package>"

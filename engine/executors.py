@@ -23,7 +23,7 @@ def find_fiji_launcher(fiji_dir: Path) -> Path:
         fiji_dir / "fiji",
     ]
     for candidate in candidates:
-        if candidate.exists():
+        if candidate.is_file():
             return candidate
     raise FileNotFoundError(f"Could not find a Fiji launcher under {fiji_dir}")
 

@@ -2,6 +2,8 @@
 
 `leaf-measure` keeps the published FAMeLeS path by default.
 
+If the machine is missing upstream macros or Fiji, prefer `.\scripts\bootstrap.ps1` first. It installs the current Python dependencies and fetches missing public runtime assets before analysis.
+
 Automatic repair depends on mode:
 
 - `Full image`: the repair removes an edge-connected background artifact after the binary mask is produced and then re-runs measurement on the corrected mask.

@@ -25,7 +25,8 @@ from engine.reporting import (
     write_run_summary,
     write_trait_explanations,
 )
-from engine.runtime import resolve_runtime
+from engine.runtime import repo_root, resolve_runtime
+from engine.upstream import download_and_extract_fiji, download_and_stage_figshare_assets
 
 
 def parse_args() -> argparse.Namespace:
@@ -39,6 +40,19 @@ def parse_args() -> argparse.Namespace:
     analyze.add_argument("--fiji", type=Path)
     analyze.add_argument("--python", type=Path, dest="python_exe")
     analyze.add_argument("--assets", type=Path, dest="assets_dir")
+
+    fetch_assets = subparsers.add_parser(
+        "fetch-assets",
+        help="Download the upstream FAMeLeS macros and trial package from Figshare.",
+    )
+    fetch_assets.add_argument("--destination", type=Path)
+    fetch_assets.add_argument("--article-id", default="22354405")
+
+    fetch_fiji = subparsers.add_parser(
+        "fetch-fiji",
+        help="Download the latest Fiji distribution into a local runtime directory.",
+    )
+    fetch_fiji.add_argument("--destination", type=Path)
     return parser.parse_args()
 
 
@@ -305,6 +319,17 @@ def main() -> int:
     args = parse_args()
     if args.command == "analyze":
         return analyze(args)
+    if args.command == "fetch-assets":
+        destination = args.destination or (repo_root() / ".leaf-measure-assets")
+        staged = download_and_stage_figshare_assets(destination, article_id=args.article_id)
+        print(staged)
+        return 0
+    if args.command == "fetch-fiji":
+        repo = Path(__file__).resolve().parents[1]
+        destination = args.destination or (repo / "fiji-latest-win64-jdk")
+        fiji_dir = download_and_extract_fiji(destination)
+        print(fiji_dir)
+        return 0
     raise ValueError(f"Unsupported command: {args.command}")
 
 

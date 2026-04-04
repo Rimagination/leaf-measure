@@ -31,3 +31,10 @@ For user-facing outputs in `Thumbnails` mode, `leaf-measure` separates two repor
 - `results_fameles_particles_raw.csv`: the original particle-level table when the published FAMeLeS second-stage measurement reports multiple particles inside a single exported thumbnail
 
 This keeps the original Fiji particle table available for traceability while giving end users a one-thumbnail-one-row table by default.
+
+For setup, the repository now exposes two public helper commands:
+
+- `python -m engine.cli fetch-assets`: download the public Figshare macros and `Trial.zip`, then stage them into `.leaf-measure-assets/`
+- `python -m engine.cli fetch-fiji`: download the latest Fiji distribution into `fiji-latest-win64-jdk/`
+
+On Windows, `.\scripts\bootstrap.ps1` uses those commands automatically when the current machine is missing upstream assets or Fiji.
