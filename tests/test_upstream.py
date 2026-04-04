@@ -5,9 +5,11 @@ from pathlib import Path
 import zipfile
 
 import pytest
+import requests
 
 from engine.upstream import (
     FIJI_WINDOWS_ARCHIVE_URL,
+    _download_file,
     download_and_stage_figshare_assets,
     extract_fiji_archive,
     stage_assets_from_source,
@@ -77,6 +79,35 @@ class FakeSession:
             raise AssertionError(f"Unexpected URL: {url}") from exc
 
 
+class FailingThenSuccessfulResponse:
+    def __init__(self, *, content: bytes, fail_once: bool = False) -> None:
+        self.content = content
+        self.fail_once = fail_once
+        self._attempts = 0
+
+    def raise_for_status(self) -> None:
+        return None
+
+    def iter_content(self, chunk_size: int = 65536):
+        self._attempts += 1
+        if self.fail_once and self._attempts == 1:
+            raise requests.exceptions.ChunkedEncodingError("transient read failure")
+        for start in range(0, len(self.content), chunk_size):
+            yield self.content[start : start + chunk_size]
+
+
+class SequenceSession:
+    def __init__(self, responses: list[object]) -> None:
+        self.responses = list(responses)
+        self.calls = 0
+
+    def get(self, url: str, *, timeout: int = 60, stream: bool = False):
+        self.calls += 1
+        if not self.responses:
+            raise AssertionError(f"Unexpected extra request for {url}")
+        return self.responses.pop(0)
+
+
 def test_download_and_stage_figshare_assets_fetches_macros_and_trial_zip(tmp_path: Path) -> None:
     trial_zip = build_zip(
         {
@@ -119,6 +150,26 @@ def test_download_and_stage_figshare_assets_fetches_macros_and_trial_zip(tmp_pat
         destination_root / "macros" / "original" / "Fameles_v2_Thumbnails.ijm"
     ).read_bytes() == b"thumb-macro"
     assert (destination_root / "fixtures" / "trial_input" / "example.tif").read_bytes() == b"trial-image"
+
+
+def test_download_file_retries_after_transient_chunked_failure(tmp_path: Path) -> None:
+    destination = tmp_path / "fiji.zip"
+    session = SequenceSession(
+        [
+            FailingThenSuccessfulResponse(content=b"bad-partial", fail_once=True),
+            FailingThenSuccessfulResponse(content=b"good-archive"),
+        ]
+    )
+
+    downloaded = _download_file(
+        "https://download.example/fiji.zip",
+        destination,
+        session=session,
+    )
+
+    assert downloaded == destination
+    assert destination.read_bytes() == b"good-archive"
+    assert session.calls == 2
 
 
 def test_extract_fiji_archive_returns_launcher_directory(tmp_path: Path) -> None:

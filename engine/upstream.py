@@ -7,6 +7,7 @@ import zipfile
 
 import requests
 from requests.adapters import HTTPAdapter
+from requests.exceptions import ChunkedEncodingError, ConnectionError as RequestsConnectionError
 from urllib3.util.retry import Retry
 
 from engine.executors import find_fiji_launcher
@@ -80,15 +81,28 @@ def stage_assets_from_source(source_root: Path, destination_root: Path) -> Path:
     return destination_root
 
 
-def _download_file(url: str, destination: Path, *, session: requests.Session) -> Path:
-    response = session.get(url, timeout=120, stream=True)
-    response.raise_for_status()
+def _download_file(url: str, destination: Path, *, session: requests.Session, attempts: int = 3) -> Path:
     destination.parent.mkdir(parents=True, exist_ok=True)
-    with destination.open("wb") as handle:
-        for chunk in response.iter_content(chunk_size=65536):
-            if chunk:
-                handle.write(chunk)
-    return destination
+    last_error: Exception | None = None
+
+    for attempt in range(1, attempts + 1):
+        try:
+            response = session.get(url, timeout=120, stream=True)
+            response.raise_for_status()
+            with destination.open("wb") as handle:
+                for chunk in response.iter_content(chunk_size=65536):
+                    if chunk:
+                        handle.write(chunk)
+            return destination
+        except (ChunkedEncodingError, RequestsConnectionError) as error:
+            last_error = error
+            if destination.exists():
+                destination.unlink()
+            if attempt == attempts:
+                raise
+
+    assert last_error is not None
+    raise last_error
 
 
 def build_http_session() -> requests.Session:
