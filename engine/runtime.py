@@ -103,6 +103,27 @@ def looks_like_assets_root(path: Path) -> bool:
     return all(check.exists() for check in checks)
 
 
+def valid_fiji_dir(path: Path | None) -> Path | None:
+    if path is None:
+        return None
+    resolved = path.resolve()
+    return resolved if resolved.exists() else None
+
+
+def valid_python_exe(path: Path | None) -> Path | None:
+    if path is None:
+        return None
+    resolved = path.resolve()
+    return resolved if resolved.exists() else None
+
+
+def valid_assets_dir(path: Path | None) -> Path | None:
+    if path is None:
+        return None
+    resolved = path.resolve()
+    return resolved if looks_like_assets_root(resolved) else None
+
+
 def probe_runtime(
     *,
     cli_fiji_dir: Path | None = None,
@@ -128,12 +149,13 @@ def probe_runtime(
     if cli_fiji_dir:
         fiji_dir = cli_fiji_dir.resolve()
         source = "cli"
-    elif config.fiji_dir:
-        fiji_dir = config.fiji_dir.resolve()
+    elif valid_fiji_dir(config.fiji_dir):
+        fiji_dir = valid_fiji_dir(config.fiji_dir)
         source = "config"
     elif env_fiji:
-        fiji_dir = Path(env_fiji).resolve()
-        source = "env"
+        fiji_dir = valid_fiji_dir(Path(env_fiji))
+        if fiji_dir is not None:
+            source = "env"
     else:
         for candidate in fiji_candidates:
             if candidate.exists():
@@ -142,19 +164,22 @@ def probe_runtime(
 
     if cli_python_exe:
         python_exe = cli_python_exe.resolve()
-    elif config.python_exe:
-        python_exe = config.python_exe.resolve()
+    elif valid_python_exe(config.python_exe):
+        python_exe = valid_python_exe(config.python_exe)
     elif env_python:
-        python_exe = Path(env_python).resolve()
+        python_exe = valid_python_exe(Path(env_python)) or Path(sys.executable).resolve()
     else:
         python_exe = Path(sys.executable).resolve()
 
     if cli_assets_dir:
         assets_dir = cli_assets_dir.resolve()
-    elif config.assets_dir:
-        assets_dir = config.assets_dir.resolve()
+    elif valid_assets_dir(config.assets_dir):
+        assets_dir = valid_assets_dir(config.assets_dir)
+        source = "config"
     elif env_assets:
-        assets_dir = Path(env_assets).resolve()
+        assets_dir = valid_assets_dir(Path(env_assets))
+        if assets_dir is not None:
+            source = "env"
     else:
         for candidate in assets_candidates:
             if looks_like_assets_root(candidate):
