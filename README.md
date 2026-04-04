@@ -89,10 +89,10 @@ Use leaf-measure to analyze this folder. If I have not specified Full image or T
 仓库已经给 agent 准备好了：
 
 - 共享 CLI：`python -m engine.cli analyze ...`
-- canonical skill 源：`skills/leaf-fameles/`
+- canonical skill 源：`skills/leaf-measure/`
 - 本地生成的 repo-local skills：
-  - `.agents/skills/leaf-fameles/`
-  - `.claude/skills/leaf-fameles/`
+  - `.agents/skills/leaf-measure/`
+  - `.claude/skills/leaf-measure/`
 - 运行时模板：`config/runtime.example.toml`
 - 自动 bootstrap 脚本：`scripts/bootstrap.ps1`
 - 上游资源 staging 脚本：`scripts/stage-assets.ps1`
@@ -104,7 +104,7 @@ Use leaf-measure to analyze this folder. If I have not specified Full image or T
 python -m engine.cli install-skill
 ```
 
-默认会安装到 `$CODEX_HOME/skills/leaf-fameles`（未设置 `CODEX_HOME` 时为 `~/.codex/skills/leaf-fameles`）。
+默认会安装到 `$CODEX_HOME/skills/leaf-measure`（未设置 `CODEX_HOME` 时为 `~/.codex/skills/leaf-measure`）。
 安装后，skill 自带的 `scripts/setup_and_analyze.py` 会在首次运行时把共享仓库克隆或更新到 `$CODEX_HOME/vendor/leaf-measure`，然后自动执行 `doctor` 和 `bootstrap`。
 如果你打开的是仓库本身，`.\scripts\bootstrap.ps1` 也会自动把 canonical `skills/` 同步到本地 `.agents/` 和 `.claude/`。
 
@@ -149,7 +149,7 @@ python -m engine.cli analyze --input "<folder>" --output "<run-dir>" --mode full
 如果你已经把 canonical skill 安装到了全局目录，也可以直接在已安装 skill 目录中让 agent 调这个 helper：
 
 ```text
-Run python scripts/setup_and_analyze.py analyze --input "<folder>" --output "<run-dir>" --mode full from the installed leaf-fameles skill directory.
+Run python scripts/setup_and_analyze.py analyze --input "<folder>" --output "<run-dir>" --mode full from the installed leaf-measure skill directory.
 ```
 
 ### 手动安装
@@ -464,10 +464,10 @@ Use leaf-measure to analyze this folder. If I have not specified Full image or T
 The repository already gives agents what they need:
 
 - a shared CLI: `python -m engine.cli analyze ...`
-- a canonical skill source: `skills/leaf-fameles/`
+- a canonical skill source: `skills/leaf-measure/`
 - locally generated repo-local skills:
-  - `.agents/skills/leaf-fameles/`
-  - `.claude/skills/leaf-fameles/`
+  - `.agents/skills/leaf-measure/`
+  - `.claude/skills/leaf-measure/`
 - a runtime template: `config/runtime.example.toml`
 - an automatic bootstrap script: `scripts/bootstrap.ps1`
 - an upstream-asset staging script: `scripts/stage-assets.ps1`
@@ -479,7 +479,7 @@ If you do not want to open the whole repository every time, you can also install
 python -m engine.cli install-skill
 ```
 
-By default this installs to `$CODEX_HOME/skills/leaf-fameles` (or `~/.codex/skills/leaf-fameles` when `CODEX_HOME` is unset).
+By default this installs to `$CODEX_HOME/skills/leaf-measure` (or `~/.codex/skills/leaf-measure` when `CODEX_HOME` is unset).
 The bundled `scripts/setup_and_analyze.py` helper then clones or updates the shared repo cache under `$CODEX_HOME/vendor/leaf-measure` and runs `doctor` plus `bootstrap` on first use.
 If you are working inside the repository itself, `.\scripts\bootstrap.ps1` also syncs the canonical `skills/` directory into local `.agents/` and `.claude/` host directories.
 
@@ -524,7 +524,7 @@ python -m engine.cli analyze --input "<folder>" --output "<run-dir>" --mode full
 If you have already installed the canonical skill globally, you can also tell the agent to run the bundled helper from the installed skill directory:
 
 ```text
-Run python scripts/setup_and_analyze.py analyze --input "<folder>" --output "<run-dir>" --mode full from the installed leaf-fameles skill directory.
+Run python scripts/setup_and_analyze.py analyze --input "<folder>" --output "<run-dir>" --mode full from the installed leaf-measure skill directory.
 ```
 
 ### Manual Installation

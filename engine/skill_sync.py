@@ -43,6 +43,14 @@ def sync_all_skills(repo_root: Path) -> list[Path]:
     skills_root = repo_root / "skills"
     if not skills_root.exists():
         return created
+    skill_names = {source.name for source in sorted(skills_root.iterdir()) if source.is_dir()}
+    for host in SKILL_HOSTS:
+        host_root = repo_root / host
+        if not host_root.exists():
+            continue
+        for target in sorted(host_root.iterdir()):
+            if target.is_dir() and target.name not in skill_names:
+                shutil.rmtree(target)
     for source in sorted(skills_root.iterdir()):
         if not source.is_dir():
             continue

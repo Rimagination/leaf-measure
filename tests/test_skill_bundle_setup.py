@@ -6,7 +6,7 @@ import subprocess
 
 
 def load_setup_module(repo_root: Path):
-    script_path = repo_root / "skills" / "leaf-fameles" / "scripts" / "setup_and_analyze.py"
+    script_path = repo_root / "skills" / "leaf-measure" / "scripts" / "setup_and_analyze.py"
     spec = importlib.util.spec_from_file_location("leaf_fameles_setup", script_path)
     assert spec is not None
     assert spec.loader is not None

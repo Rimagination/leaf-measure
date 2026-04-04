@@ -39,4 +39,4 @@ For setup, the repository now exposes two public helper commands:
 
 On Windows, `.\scripts\bootstrap.ps1` uses those commands automatically when the current machine is missing upstream assets or Fiji.
 
-For skill layout, `skills/leaf-fameles/` is now the canonical source. The repo-local host copies under `.agents/skills/leaf-fameles/` and `.claude/skills/leaf-fameles/` are generated from that source via `python -m engine.cli sync-skills` or `.\scripts\sync-skills.ps1`.
+For skill layout, `skills/leaf-measure/` is now the canonical source. The repo-local host copies under `.agents/skills/leaf-measure/` and `.claude/skills/leaf-measure/` are generated from that source via `python -m engine.cli sync-skills` or `.\scripts\sync-skills.ps1`.

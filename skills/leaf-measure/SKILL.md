@@ -1,16 +1,16 @@
 ---
-name: leaf-fameles
+name: leaf-measure
 description: Use when measuring leaf area, perimeter, length, width, circularity, and solidity from a folder of leaf images with the Fiji-based FAMeLeS workflow, especially when the user asks to analyze a directory of leaf scans or photos and needs a results table plus segmentation outputs.
 ---
 
-# leaf-fameles
+# leaf-measure
 
 Use this skill to run the shared `leaf-measure` engine, not to re-implement the method in the prompt.
 
 This skill supports two host patterns:
 
 - repo-local: the current workspace is the `leaf-measure` repository
-- standalone installed skill: the skill lives under `$CODEX_HOME/skills/leaf-fameles` and uses `scripts/setup_and_analyze.py` to clone or update the shared repo cache under `$CODEX_HOME/vendor/leaf-measure`
+- standalone installed skill: the skill lives under `$CODEX_HOME/skills/leaf-measure` and uses `scripts/setup_and_analyze.py` to clone or update the shared repo cache under `$CODEX_HOME/vendor/leaf-measure`
 
 ## Workflow
 

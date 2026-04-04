@@ -77,10 +77,10 @@ def parse_args() -> argparse.Namespace:
 
     install_skill_parser = subparsers.add_parser(
         "install-skill",
-        help="Install the canonical leaf-fameles skill into a target global skill directory.",
+        help="Install the canonical leaf-measure skill into a target global skill directory.",
     )
     install_skill_parser.add_argument("--repo-root", type=Path)
-    install_skill_parser.add_argument("--skill-name", default="leaf-fameles")
+    install_skill_parser.add_argument("--skill-name", default="leaf-measure")
     install_skill_parser.add_argument("--destination", type=Path)
     return parser.parse_args()
 
