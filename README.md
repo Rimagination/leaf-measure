@@ -2,7 +2,7 @@
 
 基于已发表 FAMeLeS 方法的叶片形态测量仓库与 Skill。它把 Fiji 宏工作流包装成可由 agent 调用、可在新数据上复用、并且可验证的分析流程。
 
-![leaf-measure demo](docs/assets/demo-run.png)
+![leaf-measure cover](docs/assets/cover.jpg)
 
 <a id="chinese"></a>
 
@@ -332,7 +332,7 @@ python -m pytest tests -q
 
 `leaf-measure` packages the published Fiji-based FAMeLeS workflow into a repo and skill that agents can run on new folders of leaf images.
 
-![leaf-measure demo](docs/assets/demo-run.png)
+![leaf-measure cover](docs/assets/cover.jpg)
 
 The target request is:
 
