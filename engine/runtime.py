@@ -6,6 +6,7 @@ from pathlib import Path
 import sys
 
 from engine.config import RuntimeConfig, read_runtime_config
+from engine.errors import LeafMeasureError
 
 
 @dataclass(frozen=True)
@@ -16,6 +17,24 @@ class ResolvedRuntime:
     assets_dir: Path
     display_environment: str
     source: str
+
+
+@dataclass(frozen=True)
+class RuntimeProbe:
+    repo_root: Path
+    config_path: Path
+    fiji_dir: Path | None
+    python_exe: Path
+    assets_dir: Path | None
+    display_environment: str
+    source: str
+    fiji_candidates: list[Path]
+    assets_candidates: list[Path]
+    issues: list[str]
+
+    @property
+    def ready(self) -> bool:
+        return self.fiji_dir is not None and self.assets_dir is not None
 
 
 def repo_root(start: Path | None = None) -> Path:
@@ -84,15 +103,16 @@ def looks_like_assets_root(path: Path) -> bool:
     return all(check.exists() for check in checks)
 
 
-def resolve_runtime(
+def probe_runtime(
     *,
     cli_fiji_dir: Path | None = None,
     cli_python_exe: Path | None = None,
     cli_assets_dir: Path | None = None,
     root: Path | None = None,
-) -> ResolvedRuntime:
+) -> RuntimeProbe:
     root = repo_root(root)
-    config = read_runtime_config(runtime_config_path(root))
+    config_path = runtime_config_path(root)
+    config = read_runtime_config(config_path)
     env_fiji = os.environ.get("FIJI_DIR")
     env_python = os.environ.get("PYTHON_EXE")
     env_assets = os.environ.get("LEAF_MEASURE_ASSETS_DIR")
@@ -101,6 +121,9 @@ def resolve_runtime(
     python_exe: Path | None = None
     assets_dir: Path | None = None
     source = "local-discovery"
+    fiji_candidates = discover_fiji_candidates(root)
+    assets_candidates = discover_assets_candidates(root)
+    issues: list[str] = []
 
     if cli_fiji_dir:
         fiji_dir = cli_fiji_dir.resolve()
@@ -112,7 +135,7 @@ def resolve_runtime(
         fiji_dir = Path(env_fiji).resolve()
         source = "env"
     else:
-        for candidate in discover_fiji_candidates(root):
+        for candidate in fiji_candidates:
             if candidate.exists():
                 fiji_dir = candidate
                 break
@@ -133,29 +156,75 @@ def resolve_runtime(
     elif env_assets:
         assets_dir = Path(env_assets).resolve()
     else:
-        for candidate in discover_assets_candidates(root):
+        for candidate in assets_candidates:
             if looks_like_assets_root(candidate):
                 assets_dir = candidate
                 break
 
     if fiji_dir is None:
-        raise FileNotFoundError(
-            "Could not resolve Fiji. Provide --fiji, set config/runtime.toml, "
-            "or set FIJI_DIR."
-        )
+        issues.append("missing_fiji")
     if assets_dir is None:
-        raise FileNotFoundError(
-            "Could not resolve leaf-measure assets. Provide --assets, set "
-            "config/runtime.toml, set LEAF_MEASURE_ASSETS_DIR, or stage upstream assets "
-            "into .leaf-measure-assets/. You can also run "
-            "`python -m engine.cli fetch-assets` to download the public Figshare package."
-        )
+        issues.append("missing_assets")
 
-    return ResolvedRuntime(
+    return RuntimeProbe(
         repo_root=root,
+        config_path=config_path,
         fiji_dir=fiji_dir,
         python_exe=python_exe,
         assets_dir=assets_dir,
         display_environment=detect_display_environment(),
         source=source,
+        fiji_candidates=fiji_candidates,
+        assets_candidates=assets_candidates,
+        issues=issues,
+    )
+
+
+def resolve_runtime(
+    *,
+    cli_fiji_dir: Path | None = None,
+    cli_python_exe: Path | None = None,
+    cli_assets_dir: Path | None = None,
+    root: Path | None = None,
+) -> ResolvedRuntime:
+    probe = probe_runtime(
+        cli_fiji_dir=cli_fiji_dir,
+        cli_python_exe=cli_python_exe,
+        cli_assets_dir=cli_assets_dir,
+        root=root,
+    )
+    if probe.fiji_dir is None:
+        raise LeafMeasureError(
+            code="missing_fiji",
+            message="Could not resolve Fiji.",
+            hints=[
+                "Run `python -m engine.cli fetch-fiji` or `./scripts/bootstrap.ps1`.",
+                "Or provide `--fiji`, set `config/runtime.toml`, or set `FIJI_DIR`.",
+            ],
+            details={
+                "config_path": probe.config_path,
+                "fiji_candidates": probe.fiji_candidates,
+            },
+        )
+    if probe.assets_dir is None:
+        raise LeafMeasureError(
+            code="missing_assets",
+            message="Could not resolve leaf-measure assets.",
+            hints=[
+                "Run `python -m engine.cli fetch-assets` or `./scripts/bootstrap.ps1`.",
+                "Or provide `--assets`, set `config/runtime.toml`, or set `LEAF_MEASURE_ASSETS_DIR`.",
+            ],
+            details={
+                "config_path": probe.config_path,
+                "assets_candidates": probe.assets_candidates,
+            },
+        )
+
+    return ResolvedRuntime(
+        repo_root=probe.repo_root,
+        fiji_dir=probe.fiji_dir,
+        python_exe=probe.python_exe,
+        assets_dir=probe.assets_dir,
+        display_environment=probe.display_environment,
+        source=probe.source,
     )

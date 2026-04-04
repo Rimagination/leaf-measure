@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import argparse
+import json
 import shutil
 from pathlib import Path
+import sys
 
 from engine.dpi import collect_dpi_metadata
+from engine.errors import LeafMeasureError, write_failure_report
 from engine.executors import run_batch_macro
 from engine.macros import (
     build_full_macro,
@@ -25,7 +28,9 @@ from engine.reporting import (
     write_run_summary,
     write_trait_explanations,
 )
-from engine.runtime import repo_root, resolve_runtime
+from engine.runtime import probe_runtime, repo_root, resolve_runtime
+from engine.sanity import full_image_sanity_warnings, image_area_map
+from engine.skill_sync import sync_all_skills
 from engine.upstream import download_and_extract_fiji, download_and_stage_figshare_assets
 
 
@@ -41,6 +46,16 @@ def parse_args() -> argparse.Namespace:
     analyze.add_argument("--python", type=Path, dest="python_exe")
     analyze.add_argument("--assets", type=Path, dest="assets_dir")
 
+    doctor = subparsers.add_parser(
+        "doctor",
+        help="Probe runtime readiness and write a machine-readable environment report.",
+    )
+    doctor.add_argument("--fiji", type=Path)
+    doctor.add_argument("--python", type=Path, dest="python_exe")
+    doctor.add_argument("--assets", type=Path, dest="assets_dir")
+    doctor.add_argument("--output", type=Path)
+    doctor.add_argument("--json", action="store_true", dest="emit_json")
+
     fetch_assets = subparsers.add_parser(
         "fetch-assets",
         help="Download the upstream FAMeLeS macros and trial package from Figshare.",
@@ -53,6 +68,12 @@ def parse_args() -> argparse.Namespace:
         help="Download the latest Fiji distribution into a local runtime directory.",
     )
     fetch_fiji.add_argument("--destination", type=Path)
+
+    sync_skills = subparsers.add_parser(
+        "sync-skills",
+        help="Sync canonical skills/ into repo-local .agents/ and .claude/ skill directories.",
+    )
+    sync_skills.add_argument("--repo-root", type=Path)
     return parser.parse_args()
 
 
@@ -179,8 +200,20 @@ def analyze(args: argparse.Namespace) -> int:
     if execution.exit_code != 0:
         warnings.append(f"Fiji returned exit code {execution.exit_code}. Check run logs in _work/.")
     if not initial_results_csv.exists():
-        raise RuntimeError(
-            f"Fiji run did not produce {initial_results_csv}. See {execution.stderr_log} for details."
+        raise LeafMeasureError(
+            code="missing_results_csv",
+            message=f"Fiji did not produce the expected results table: {initial_results_csv.name}.",
+            hints=[
+                "Inspect `failure.json` and the Fiji logs under `_work/`.",
+                "If stdout/stderr are empty, verify Fiji launched correctly and rerun `python -m engine.cli doctor`.",
+            ],
+            details={
+                "expected_results_csv": initial_results_csv,
+                "stdout_log": execution.stdout_log,
+                "stderr_log": execution.stderr_log,
+                "executor": execution.executor,
+                "fiji_exit_code": execution.exit_code,
+            },
         )
 
     normalize_results_csv(initial_results_csv)
@@ -207,6 +240,13 @@ def analyze(args: argparse.Namespace) -> int:
                     f"Fiji returned exit code {rerun.exit_code} during corrected-mask measurement rerun."
                 )
             normalize_results_csv(results_csv)
+        full_frame = normalize_results_csv(results_csv)
+        warnings.extend(
+            full_image_sanity_warnings(
+                full_frame,
+                image_areas=image_area_map(staged_input.staged_dir),
+            )
+        )
     elif should_prefer_thumbnail_repair(staged_input):
         correction = correct_full_masks(temp_full_area)
         corrected_mask_files = correction.corrected_files
@@ -227,7 +267,18 @@ def analyze(args: argparse.Namespace) -> int:
             area_dir=outputs["area"],
         )
         if not extraction.exported_files:
-            raise RuntimeError("Thumbnail extraction did not produce any per-leaf outputs.")
+            raise LeafMeasureError(
+                code="thumbnail_extraction_empty",
+                message="Thumbnail repair path did not produce any per-leaf outputs.",
+                hints=[
+                    "Review the corrected full-image masks in `_work/full_area`.",
+                    "Check whether the input image contains separable leaf objects after segmentation.",
+                ],
+                details={
+                    "full_mask_dir": temp_full_area,
+                    "source_image_dir": staged_input.staged_dir,
+                },
+            )
         rerun = run_batch_macro(
             fiji_dir=runtime.fiji_dir,
             macro_text=build_thumbnail_measurement_macro(
@@ -248,8 +299,20 @@ def analyze(args: argparse.Namespace) -> int:
             "No artifact-triggered repair was needed. The run used the original FAMeLeS thumbnails macro path."
         )
         if not raw_results_csv.exists():
-            raise RuntimeError(
-                f"Fiji run did not produce {raw_results_csv}. See {execution.stderr_log} for details."
+            raise LeafMeasureError(
+                code="missing_thumbnail_results_csv",
+                message=f"Fiji did not produce the expected thumbnails results table: {raw_results_csv.name}.",
+                hints=[
+                    "Inspect `failure.json` and the Fiji logs under `_work/`.",
+                    "If stdout/stderr are empty, verify Fiji launched correctly and rerun `python -m engine.cli doctor`.",
+                ],
+                details={
+                    "expected_results_csv": raw_results_csv,
+                    "stdout_log": execution.stdout_log,
+                    "stderr_log": execution.stderr_log,
+                    "executor": execution.executor,
+                    "fiji_exit_code": execution.exit_code,
+                },
             )
         raw_frame = normalize_results_csv(raw_results_csv)
         rerun_outline = run_batch_macro(
@@ -315,22 +378,112 @@ def analyze(args: argparse.Namespace) -> int:
     return 0
 
 
+def doctor(args: argparse.Namespace) -> int:
+    probe = probe_runtime(
+        cli_fiji_dir=args.fiji,
+        cli_python_exe=args.python_exe,
+        cli_assets_dir=args.assets_dir,
+    )
+    payload = {
+        "ok": probe.ready,
+        "repo_root": probe.repo_root,
+        "config_path": probe.config_path,
+        "runtime_source": probe.source,
+        "display_environment": probe.display_environment,
+        "python_exe": probe.python_exe,
+        "fiji_dir": probe.fiji_dir,
+        "assets_dir": probe.assets_dir,
+        "fiji_candidates": probe.fiji_candidates,
+        "assets_candidates": probe.assets_candidates,
+        "issues": probe.issues,
+        "hints": [
+            "Run `./scripts/bootstrap.ps1` on Windows for a one-command setup path.",
+            "Run `python -m engine.cli fetch-fiji` if Fiji is missing.",
+            "Run `python -m engine.cli fetch-assets` if upstream macros/assets are missing.",
+        ],
+    }
+    if args.output:
+        write_manifest(args.output, payload)
+        print(args.output)
+    elif args.emit_json:
+        print(json.dumps(payload, indent=2, default=str))
+    else:
+        print(f"ok={probe.ready}")
+        print(f"python={probe.python_exe}")
+        print(f"fiji={probe.fiji_dir or 'missing'}")
+        print(f"assets={probe.assets_dir or 'missing'}")
+        if probe.issues:
+            print(f"issues={','.join(probe.issues)}")
+    return 0 if probe.ready else 2
+
+
+def _failure_path_for_args(args: argparse.Namespace) -> Path | None:
+    output = getattr(args, "output", None)
+    if isinstance(output, Path):
+        return output / "failure.json"
+    return None
+
+
 def main() -> int:
     args = parse_args()
-    if args.command == "analyze":
-        return analyze(args)
-    if args.command == "fetch-assets":
-        destination = args.destination or (repo_root() / ".leaf-measure-assets")
-        staged = download_and_stage_figshare_assets(destination, article_id=args.article_id)
-        print(staged)
-        return 0
-    if args.command == "fetch-fiji":
-        repo = Path(__file__).resolve().parents[1]
-        destination = args.destination or (repo / "fiji-latest-win64-jdk")
-        fiji_dir = download_and_extract_fiji(destination)
-        print(fiji_dir)
-        return 0
-    raise ValueError(f"Unsupported command: {args.command}")
+    try:
+        if args.command == "analyze":
+            return analyze(args)
+        if args.command == "doctor":
+            return doctor(args)
+        if args.command == "fetch-assets":
+            destination = args.destination or (repo_root() / ".leaf-measure-assets")
+            staged = download_and_stage_figshare_assets(destination, article_id=args.article_id)
+            print(staged)
+            return 0
+        if args.command == "fetch-fiji":
+            repo = Path(__file__).resolve().parents[1]
+            destination = args.destination or (repo / "fiji-latest-win64-jdk")
+            fiji_dir = download_and_extract_fiji(destination)
+            print(fiji_dir)
+            return 0
+        if args.command == "sync-skills":
+            synced = sync_all_skills(args.repo_root or repo_root())
+            for path in synced:
+                print(path)
+            return 0
+        raise ValueError(f"Unsupported command: {args.command}")
+    except LeafMeasureError as error:
+        failure_path = _failure_path_for_args(args)
+        if failure_path is not None:
+            write_failure_report(failure_path, error)
+            print(failure_path, file=sys.stderr)
+        print(f"{error.code}: {error.message}", file=sys.stderr)
+        for hint in error.hints:
+            print(f"- {hint}", file=sys.stderr)
+        return 2
+    except FileNotFoundError as error:
+        wrapped = LeafMeasureError(
+            code="file_not_found",
+            message=str(error),
+            hints=["Check the input path and runtime paths in the doctor report."],
+        )
+        failure_path = _failure_path_for_args(args)
+        if failure_path is not None:
+            write_failure_report(failure_path, wrapped)
+            print(failure_path, file=sys.stderr)
+        print(f"{wrapped.code}: {wrapped.message}", file=sys.stderr)
+        return 2
+    except RuntimeError as error:
+        wrapped = LeafMeasureError(
+            code="analysis_failed",
+            message=str(error),
+            hints=[
+                "Inspect `failure.json`, `manifest.json`, and Fiji logs under `_work/`.",
+                "Run `python -m engine.cli doctor --output <path>` to capture runtime state.",
+            ],
+        )
+        failure_path = _failure_path_for_args(args)
+        if failure_path is not None:
+            write_failure_report(failure_path, wrapped)
+            print(failure_path, file=sys.stderr)
+        print(f"{wrapped.code}: {wrapped.message}", file=sys.stderr)
+        return 2
 
 
 if __name__ == "__main__":

@@ -1,6 +1,7 @@
 # leaf-measure
 
 基于已发表 FAMeLeS 方法的叶片形态测量仓库与 Skill。它把 Fiji 宏工作流包装成可由 agent 调用、可在新数据上复用、并且可验证的分析流程。
+这个仓库包含共享 Python engine、canonical skill 源，以及生成到 `.agents` / `.claude` 的 repo-local skills，不是只有一个独立 skill 包。
 
 ![leaf-measure cover](docs/assets/cover.jpg)
 
@@ -87,12 +88,14 @@ Use leaf-measure to analyze this folder. If I have not specified Full image or T
 仓库已经给 agent 准备好了：
 
 - 共享 CLI：`python -m engine.cli analyze ...`
-- 项目级 skill：
+- canonical skill 源：`skills/leaf-fameles/`
+- 生成的 repo-local skills：
   - `.agents/skills/leaf-fameles/`
   - `.claude/skills/leaf-fameles/`
 - 运行时模板：`config/runtime.example.toml`
 - 自动 bootstrap 脚本：`scripts/bootstrap.ps1`
 - 上游资源 staging 脚本：`scripts/stage-assets.ps1`
+- skill 同步脚本：`scripts/sync-skills.ps1`
 
 也就是说，对 agent 用户来说，重点不是“先看 pip 怎么装”，而是：
 
@@ -104,7 +107,7 @@ Use leaf-measure to analyze this folder. If I have not specified Full image or T
 推荐先让 agent 直接运行：
 
 ```text
-Run .\scripts\bootstrap.ps1 to install Python dependencies for the current environment, download Fiji if it is missing, and fetch the public Figshare assets if they are missing.
+Run .\scripts\bootstrap.ps1 to install Python dependencies for the current environment, download Fiji if it is missing, fetch the public Figshare assets if they are missing, and write a machine-readable doctor report.
 ```
 
 如果你只想补齐其中一项，也可以继续让 agent 做下面这些事：
@@ -160,6 +163,7 @@ cd D:\path\to\leaf-measure
 - 在当前 Python 环境中安装 `leaf-measure`
 - 如果本地缺少 Fiji，就从官方地址下载
 - 如果本地缺少上游宏和 `Trial.zip`，就从论文指向的 Figshare 资源页拉取并 stage 到 `.leaf-measure-assets/`
+- 在 `config/doctor.json` 中写出 machine-readable 的运行环境报告
 
 #### 3. 手动创建 Python 环境并安装依赖
 
@@ -193,6 +197,12 @@ Copy-Item config\runtime.example.toml config\runtime.toml
 
 ```powershell
 .\scripts\bootstrap.ps1
+```
+
+或单独写出诊断报告：
+
+```powershell
+python -m engine.cli doctor --output config\doctor.json
 ```
 
 #### 6. 如果只想单独准备上游资源
@@ -361,6 +371,7 @@ python -m pytest tests -q
 ### Overview
 
 `leaf-measure` packages the published Fiji-based FAMeLeS workflow into a repo and skill that agents can run on new folders of leaf images.
+It is a shared Python engine plus a canonical skill source, not only a standalone skill package.
 
 ![leaf-measure cover](docs/assets/cover.jpg)
 
@@ -435,12 +446,14 @@ Use leaf-measure to analyze this folder. If I have not specified Full image or T
 The repository already gives agents what they need:
 
 - a shared CLI: `python -m engine.cli analyze ...`
-- project-local skills:
+- a canonical skill source: `skills/leaf-fameles/`
+- generated repo-local skills:
   - `.agents/skills/leaf-fameles/`
   - `.claude/skills/leaf-fameles/`
 - a runtime template: `config/runtime.example.toml`
 - an automatic bootstrap script: `scripts/bootstrap.ps1`
 - an upstream-asset staging script: `scripts/stage-assets.ps1`
+- a skill sync script: `scripts/sync-skills.ps1`
 
 For agent-native users, the important thing is not leading with `pip install`, but making sure:
 
@@ -452,7 +465,7 @@ For agent-native users, the important thing is not leading with `pip install`, b
 The recommended first step for an agent is:
 
 ```text
-Run .\scripts\bootstrap.ps1 to install Python dependencies for the current environment, download Fiji if it is missing, and fetch the public Figshare assets if they are missing.
+Run .\scripts\bootstrap.ps1 to install Python dependencies for the current environment, download Fiji if it is missing, fetch the public Figshare assets if they are missing, and write a machine-readable doctor report.
 ```
 
 If you only want to override one missing component, tell the agent to continue with:
@@ -508,6 +521,7 @@ It will:
 - install `leaf-measure` into the current Python environment
 - download Fiji from the official distribution if it is missing
 - fetch the public Figshare macros and `Trial.zip` if they are missing, then stage them into `.leaf-measure-assets/`
+- write a machine-readable runtime report to `config/doctor.json`
 
 #### 3. Manual Python environment and dependency install
 
@@ -541,6 +555,12 @@ or:
 
 ```powershell
 .\scripts\bootstrap.ps1
+```
+
+or write a runtime report explicitly:
+
+```powershell
+python -m engine.cli doctor --output config\doctor.json
 ```
 
 #### 6. If you only want to prepare upstream assets

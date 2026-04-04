@@ -5,6 +5,7 @@ __pycache__/
 venv/
 
 config/runtime.toml
+config/doctor.json
 dist/
 build/
 *.egg-info/

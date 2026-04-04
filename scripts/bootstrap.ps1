@@ -105,3 +105,19 @@ Write-Host "Detected asset root: $assetsRoot"
 if ($foundFiji) {
     Write-Host "Detected Fiji root: $foundFiji"
 }
+
+$doctorReport = Join-Path $configDir "doctor.json"
+$doctorArgs = @("-m", "engine.cli", "doctor", "--output", $doctorReport)
+if ($foundFiji) {
+    $doctorArgs += @("--fiji", $foundFiji)
+}
+if (Test-Path $assetsRoot) {
+    $doctorArgs += @("--assets", $assetsRoot)
+}
+Push-Location $RepoRoot
+try {
+    Invoke-Python -CommandArgs $doctorArgs
+} finally {
+    Pop-Location
+}
+Write-Host "Doctor report written to: $doctorReport"
