@@ -108,6 +108,13 @@ python -m engine.cli install-skill
 安装后，skill 自带的 `scripts/setup_and_analyze.py` 会在首次运行时把共享仓库克隆或更新到 `$CODEX_HOME/vendor/leaf-measure`，然后自动执行 `doctor` 和 `bootstrap`。
 如果你打开的是仓库本身，`.\scripts\bootstrap.ps1` 也会自动把 canonical `skills/` 同步到本地 `.agents/` 和 `.claude/`。
 
+如果你想直接从 GitHub 安装这个独立 skill，而不是先 clone 整个仓库，请让 agent 的 skill installer 安装：
+
+- repo: `Rimagination/leaf-measure`
+- path: `skills/leaf-measure`
+
+安装完成后，重启 Codex 或重新加载技能列表，让新安装的 `leaf-measure` skill 被发现。
+
 也就是说，对 agent 用户来说，重点不是“先看 pip 怎么装”，而是：
 
 - 仓库能不能被 agent 直接理解
@@ -482,6 +489,13 @@ python -m engine.cli install-skill
 By default this installs to `$CODEX_HOME/skills/leaf-measure` (or `~/.codex/skills/leaf-measure` when `CODEX_HOME` is unset).
 The bundled `scripts/setup_and_analyze.py` helper then clones or updates the shared repo cache under `$CODEX_HOME/vendor/leaf-measure` and runs `doctor` plus `bootstrap` on first use.
 If you are working inside the repository itself, `.\scripts\bootstrap.ps1` also syncs the canonical `skills/` directory into local `.agents/` and `.claude/` host directories.
+
+If you want to install the standalone skill directly from GitHub instead of cloning the repository first, tell your agent's skill installer to install:
+
+- repo: `Rimagination/leaf-measure`
+- path: `skills/leaf-measure`
+
+After installation, restart Codex or refresh the skill list so the new `leaf-measure` skill is discoverable.
 
 For agent-native users, the important thing is not leading with `pip install`, but making sure:
 
