@@ -27,18 +27,20 @@ python -m engine.cli analyze --input "<folder>" --output "<run-dir>" --mode thum
 5. Explain:
    - what was measured
    - which mode was used
+   - that `results.csv` is the user-facing table and `results_fameles_particles_raw.csv` preserves the original particle-level table when present
    - that outputs are in pixels by default
    - whether DPI metadata was found
+   - whether automatic repair was triggered for a mask artifact
    - that binary and outline outputs should be visually reviewed
 
 ## References
 
 - Mode choice: `references/mode-selection.md`
 - Trait definitions: `references/trait-definitions.md`
+- Artifact handling: `references/artifact-handling.md`
 
 ## Boundaries
 
 - Do not silently convert pixel outputs into physical units.
 - Do not claim the method worked if `results.csv` or output images are missing.
 - Treat the shared CLI as the source of truth.
-

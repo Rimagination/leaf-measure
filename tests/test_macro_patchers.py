@@ -17,6 +17,7 @@ def test_build_full_macro_injects_paths_and_results(tmp_path: Path) -> None:
             'setTool(0);\n'
             '/// saveAs("Jpeg", inputdir2+list1[i]);\n'
             '/// saveAs("Jpeg", inputdir3+list1[i]);\n'
+            'run("Analyze Particles...", "size=80-Infinity show=Outlines display composite");\n'
             'run("Read and Write Excel", " dataset_label=[Data are in pixels]");\n'
             'setBatchMode(false);\n'
         ),
@@ -35,6 +36,7 @@ def test_build_full_macro_injects_paths_and_results(tmp_path: Path) -> None:
 
     assert "getDirectory" not in macro
     assert "setTool(0)" not in macro
+    assert 'run("Analyze Particles...", "size=80-Infinity show=Outlines display composite exclude");' in macro
     assert 'saveAs("Results"' in macro
     assert 'run("Quit");' in macro
 
@@ -53,6 +55,8 @@ def test_build_thumbnails_macro_inserts_crop_before_mask(tmp_path: Path) -> None
             '/// saveAs("Jpeg", inputdir1a+list1[i]);\n'
             '/// saveAs("Jpeg", inputdir1b+list1[i]);\n'
             'run("Duplicate...", "title=RGB");\n\trun("Create Mask");\n'
+            'run("Analyze Particles...", "size=80-Infinity show=[Overlay Masks] composite clear add");\n'
+            'run("Analyze Particles...", "size=80-Infinity show=Outlines display composite");\n'
             'run("Read and Write Excel", " dataset_label=[Data are in pixels]");\n'
             'setBatchMode(false);\n'
         ),
@@ -73,6 +77,7 @@ def test_build_thumbnails_macro_inserts_crop_before_mask(tmp_path: Path) -> None
     assert "setTool(0)" not in macro
     assert 'run("Crop");' in macro
     assert macro.index('run("Crop");') < macro.index('run("Create Mask");')
+    assert 'run("Analyze Particles...", "size=80-Infinity show=[Overlay Masks] composite clear add");' in macro
+    assert 'run("Analyze Particles...", "size=80-Infinity show=Outlines display composite");' in macro
     assert 'saveAs("Results"' in macro
     assert 'run("Quit");' in macro
-

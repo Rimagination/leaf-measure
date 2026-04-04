@@ -1,11 +1,23 @@
 from __future__ import annotations
 
 import argparse
+import shutil
 from pathlib import Path
 
 from engine.dpi import collect_dpi_metadata
 from engine.executors import run_batch_macro
-from engine.macros import build_full_macro, build_thumbnails_macro, original_macro
+from engine.macros import (
+    build_full_macro,
+    build_full_measurement_macro,
+    build_thumbnail_outline_macro,
+    build_thumbnails_macro,
+    build_thumbnail_measurement_macro,
+    original_macro,
+)
+from engine.mask_correction import correct_full_masks
+from engine.preprocess import should_prefer_thumbnail_repair, stage_input_images
+from engine.thumbnail_extraction import extract_thumbnails_from_masks
+from engine.thumbnail_measurements import write_thumbnail_results_csv
 from engine.reporting import (
     normalize_results_csv,
     write_manifest,
@@ -65,6 +77,21 @@ def build_outputs(output_dir: Path, mode: str) -> dict[str, Path]:
     return paths
 
 
+def clear_directory(path: Path) -> None:
+    for child in path.iterdir():
+        if child.is_dir():
+            shutil.rmtree(child)
+        else:
+            child.unlink()
+
+
+def copy_files(source_dir: Path, dest_dir: Path) -> None:
+    clear_directory(dest_dir)
+    for path in sorted(source_dir.iterdir()):
+        if path.is_file():
+            shutil.copy2(path, dest_dir / path.name)
+
+
 def analyze(args: argparse.Namespace) -> int:
     runtime = resolve_runtime(
         cli_fiji_dir=args.fiji,
@@ -76,30 +103,59 @@ def analyze(args: argparse.Namespace) -> int:
         raise FileNotFoundError(f"No supported images found in {args.input}")
 
     outputs = build_outputs(args.output, args.mode)
+    staged_input = stage_input_images(args.input, outputs["work"] / "input_staged")
     results_csv = args.output / "results.csv"
+    raw_results_csv = args.output / "results_fameles_particles_raw.csv"
+    initial_results_csv = results_csv
     warnings: list[str] = []
+    repair_note = "none"
+    if staged_input.modified_files:
+        warnings.append(
+            f"Removed dark edge artifacts from {len(staged_input.modified_files)} input image(s) before Fiji execution."
+        )
 
     if args.mode == "full":
         macro = build_full_macro(
             template_path=original_macro(runtime.assets_dir, "full"),
-            input_dir=args.input,
+            input_dir=staged_input.staged_dir,
             bandpass_dir=outputs["bandpass"],
             contrasted_dir=outputs["contrasted"],
             area_dir=outputs["area"],
             outline_dir=outputs["outline"],
             results_csv=results_csv,
         )
+    elif should_prefer_thumbnail_repair(staged_input):
+        probe_bandpass = outputs["work"] / "probe_bandpass"
+        probe_contrasted = outputs["work"] / "probe_contrasted"
+        temp_full_area = outputs["work"] / "full_area"
+        temp_full_outline = outputs["work"] / "full_outline"
+        probe_bandpass.mkdir(parents=True, exist_ok=True)
+        probe_contrasted.mkdir(parents=True, exist_ok=True)
+        temp_full_area.mkdir(parents=True, exist_ok=True)
+        temp_full_outline.mkdir(parents=True, exist_ok=True)
+        temp_full_results = outputs["work"] / "full_results.csv"
+        initial_results_csv = temp_full_results
+        macro = build_full_macro(
+            template_path=original_macro(runtime.assets_dir, "full"),
+            input_dir=staged_input.staged_dir,
+            bandpass_dir=probe_bandpass,
+            contrasted_dir=probe_contrasted,
+            area_dir=temp_full_area,
+            outline_dir=temp_full_outline,
+            results_csv=temp_full_results,
+        )
     else:
         macro = build_thumbnails_macro(
             template_path=original_macro(runtime.assets_dir, "thumbnails"),
-            input_dir=args.input,
+            input_dir=staged_input.staged_dir,
             bandpass_dir=outputs["bandpass"],
             contrasted_dir=outputs["contrasted"],
             thumbnails_dir=outputs["thumbnails"],
             area_dir=outputs["area"],
             outline_dir=outputs["outline"],
-            results_csv=results_csv,
+            results_csv=raw_results_csv,
         )
+        initial_results_csv = raw_results_csv
 
     execution = run_batch_macro(
         fiji_dir=runtime.fiji_dir,
@@ -108,12 +164,99 @@ def analyze(args: argparse.Namespace) -> int:
     )
     if execution.exit_code != 0:
         warnings.append(f"Fiji returned exit code {execution.exit_code}. Check run logs in _work/.")
-    if not results_csv.exists():
+    if not initial_results_csv.exists():
         raise RuntimeError(
-            f"Fiji run did not produce {results_csv}. See {execution.stderr_log} for details."
+            f"Fiji run did not produce {initial_results_csv}. See {execution.stderr_log} for details."
         )
 
-    normalize_results_csv(results_csv)
+    normalize_results_csv(initial_results_csv)
+    corrected_mask_files: list[str] = []
+    if args.mode == "full":
+        correction = correct_full_masks(outputs["area"])
+        corrected_mask_files = correction.corrected_files
+        if corrected_mask_files:
+            warnings.append(
+                f"Corrected {len(corrected_mask_files)} binary mask(s) by removing edge-connected background regions before measurement."
+            )
+            rerun = run_batch_macro(
+                fiji_dir=runtime.fiji_dir,
+                macro_text=build_full_measurement_macro(
+                    area_dir=outputs["area"],
+                    outline_dir=outputs["outline"],
+                    results_csv=results_csv,
+                ),
+                work_dir=outputs["work"] / "measurement_rerun",
+            )
+            execution = rerun
+            if rerun.exit_code != 0:
+                warnings.append(
+                    f"Fiji returned exit code {rerun.exit_code} during corrected-mask measurement rerun."
+                )
+            normalize_results_csv(results_csv)
+    elif should_prefer_thumbnail_repair(staged_input):
+        correction = correct_full_masks(temp_full_area)
+        corrected_mask_files = correction.corrected_files
+        repair_note = (
+            "Thumbnail repair was enabled after a lightweight preflight detected dark edge artifacts in the source image. "
+            "leaf-measure used the stable per-leaf export path instead of the original FAMeLeS thumbnails macro path."
+        )
+        if corrected_mask_files:
+            warnings.append(
+                f"Applied thumbnail repair to {len(corrected_mask_files)} image(s) after detecting an edge-connected background artifact in the binary mask."
+            )
+        copy_files(probe_bandpass, outputs["bandpass"])
+        copy_files(probe_contrasted, outputs["contrasted"])
+        extraction = extract_thumbnails_from_masks(
+            full_mask_dir=temp_full_area,
+            source_image_dir=staged_input.staged_dir,
+            thumbnails_dir=outputs["thumbnails"],
+            area_dir=outputs["area"],
+        )
+        if not extraction.exported_files:
+            raise RuntimeError("Thumbnail extraction did not produce any per-leaf outputs.")
+        rerun = run_batch_macro(
+            fiji_dir=runtime.fiji_dir,
+            macro_text=build_thumbnail_measurement_macro(
+                area_dir=outputs["area"],
+                outline_dir=outputs["outline"],
+                results_csv=results_csv,
+            ),
+            work_dir=outputs["work"] / "thumbnail_measurement_rerun",
+        )
+        execution = rerun
+        if rerun.exit_code != 0:
+            warnings.append(
+                f"Fiji returned exit code {rerun.exit_code} during thumbnail measurement rerun."
+            )
+        write_thumbnail_results_csv(area_dir=outputs["area"], results_csv=results_csv)
+    else:
+        repair_note = (
+            "No artifact-triggered repair was needed. The run used the original FAMeLeS thumbnails macro path."
+        )
+        if not raw_results_csv.exists():
+            raise RuntimeError(
+                f"Fiji run did not produce {raw_results_csv}. See {execution.stderr_log} for details."
+            )
+        raw_frame = normalize_results_csv(raw_results_csv)
+        rerun_outline = run_batch_macro(
+            fiji_dir=runtime.fiji_dir,
+            macro_text=build_thumbnail_outline_macro(
+                area_dir=outputs["area"],
+                outline_dir=outputs["outline"],
+            ),
+            work_dir=outputs["work"] / "thumbnail_outline_rerun",
+        )
+        execution = rerun_outline
+        if rerun_outline.exit_code != 0:
+            warnings.append(
+                f"Fiji returned exit code {rerun_outline.exit_code} during thumbnail outline regeneration."
+            )
+        cleaned_frame = write_thumbnail_results_csv(area_dir=outputs["area"], results_csv=results_csv)
+        if len(raw_frame) != len(cleaned_frame):
+            warnings.append(
+                "The original FAMeLeS thumbnails macro measured multiple particles in at least one exported thumbnail. "
+                "leaf-measure kept that raw particle-level table in results_fameles_particles_raw.csv and wrote a one-row-per-thumbnail table to results.csv."
+            )
     dpi_metadata = collect_dpi_metadata(args.input)
     if all(value is None for value in dpi_metadata.values()):
         warnings.append("No DPI metadata was found; results remain in pixels.")
@@ -122,6 +265,7 @@ def analyze(args: argparse.Namespace) -> int:
         args.output / "method_summary.md",
         mode=args.mode,
         executor=execution.executor,
+        repair_note=repair_note if args.mode == "thumbnails" else None,
     )
     write_trait_explanations(args.output / "trait_explanations.md")
     write_run_summary(
@@ -141,7 +285,11 @@ def analyze(args: argparse.Namespace) -> int:
             "display_environment": runtime.display_environment,
             "fiji_dir": runtime.fiji_dir,
             "assets_dir": runtime.assets_dir,
+            "staged_input_dir": staged_input.staged_dir,
+            "preprocessing_modified_files": staged_input.modified_files,
+            "corrected_mask_files": corrected_mask_files,
             "results_csv": results_csv,
+            "raw_results_csv": raw_results_csv if raw_results_csv.exists() else None,
             "stdout_log": execution.stdout_log,
             "stderr_log": execution.stderr_log,
             "image_count": len(input_files),

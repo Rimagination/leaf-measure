@@ -18,3 +18,16 @@ The current product supports two FAMeLeS modes:
 
 Default units are pixels. If image DPI metadata is available, the product reports it and explains how to convert pixel outputs into physical units.
 
+For normal images, `leaf-measure` keeps the original FAMeLeS execution path.
+
+- In `Full image` mode, repair is triggered when the binary mask shows an edge-connected background artifact enclosing many interior leaf objects.
+- In `Thumbnails` mode, the workflow uses a lightweight preflight on the source image to detect strong dark-edge artifacts. Affected scans go directly to the stable repair path; unaffected scans keep the original FAMeLeS thumbnails macro path.
+
+This is intended to fix scanner-border and polarity-related failures without silently changing the published workflow on unaffected inputs, and without paying a full-image probe cost on clean thumbnail runs.
+
+For user-facing outputs in `Thumbnails` mode, `leaf-measure` separates two reporting layers:
+
+- `results.csv`: one row per exported thumbnail artifact
+- `results_fameles_particles_raw.csv`: the original particle-level table when the published FAMeLeS second-stage measurement reports multiple particles inside a single exported thumbnail
+
+This keeps the original Fiji particle table available for traceability while giving end users a one-thumbnail-one-row table by default.

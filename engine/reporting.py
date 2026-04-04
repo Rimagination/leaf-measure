@@ -34,7 +34,7 @@ def normalize_results_csv(path: Path) -> pd.DataFrame:
     return frame
 
 
-def write_method_summary(path: Path, *, mode: str, executor: str) -> None:
+def write_method_summary(path: Path, *, mode: str, executor: str, repair_note: str | None = None) -> None:
     text = (
         "# Method Summary\n\n"
         "This run executed the Fiji-based FAMeLeS workflow through the leaf-measure engine.\n\n"
@@ -43,6 +43,8 @@ def write_method_summary(path: Path, *, mode: str, executor: str) -> None:
         "- Default unit: pixels\n"
         "- Physical-unit conversion is not applied automatically\n"
     )
+    if repair_note:
+        text += f"- Repair behavior: {repair_note}\n"
     path.write_text(text, encoding="utf-8")
 
 

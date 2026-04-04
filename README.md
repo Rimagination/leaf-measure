@@ -53,6 +53,20 @@
 - `Full image`：一张图里有 5 片叶子，输出结果表里有这 5 片叶子的 5 行记录，同时输出该整张图的二值图和轮廓图
 - `Thumbnails`：同样是 5 行记录，但还会额外导出 5 张单独叶片裁切图，以及对应的单叶二值图和轮廓图
 
+### 自动修复说明
+
+`leaf-measure` 默认优先保留原始 FAMeLeS 计算路径，尤其是在未命中伪影判据的正常图像上。
+
+- `Full image`：如果二值图出现“边缘连通背景包住叶片”的失真形态，程序会先移除该背景伪影，再重新测量
+- `Thumbnails`：会先做一个轻量预判，检查输入图像是否存在明显的暗色边缘伪影；命中时直接走更稳的修复路径，未命中时继续走原始 FAMeLeS 宏路径
+- 对未命中该判据的图像，`Thumbnails` 不会先跑额外的整图探测流程，因此正常样本更快，也不会静默改写默认行为
+
+运行完成后，请查看：
+
+- `run_summary.md`：是否触发了自动修复
+- `method_summary.md`：本次运行走的是原始路径还是修复路径
+- 二值图和轮廓图：用于快速复核自动分割是否合理
+
 ### 给 Agent 用户
 
 如果你平时就是对 Codex / Claude Code 说一句话来完成安装和分析，这个仓库应该这样用：
@@ -211,6 +225,7 @@ python -m engine.cli analyze --input "D:\path\to\images" --output "D:\path\to\ru
 每次运行都会生成：
 
 - `results.csv`
+- `results_fameles_particles_raw.csv`（仅 `Thumbnails` 且命中原始粒子级导出时）
 - `manifest.json`
 - `run_summary.md`
 - `method_summary.md`
@@ -230,6 +245,8 @@ python -m engine.cli analyze --input "D:\path\to\images" --output "D:\path\to\ru
   - `03_area/`
   - `04_outline/`
 
+在 `Thumbnails` 模式下，`leaf-measure` 默认把 `results.csv` 整理成“一张导出的单叶图一行”。如果原始 FAMeLeS 第二步测量在某些单叶图中检测到了多个粒子，原始粒子级结果会保留在 `results_fameles_particles_raw.csv`，方便追溯。
+
 ### 为什么可信
 
 仓库包含：
@@ -248,7 +265,8 @@ python -m engine.cli analyze --input "D:\path\to\images" --output "D:\path\to\ru
 - 运行时解析逻辑
 - 宏 patch 逻辑
 - `Full image` 对参考输出复现
-- `Thumbnails` 实际执行与导出
+- `Thumbnails` 对参考输出复现
+- 自动修复路径对异常掩膜的单元测试
 
 运行测试：
 
@@ -353,6 +371,20 @@ Example:
 
 - `Full image`: one image contains 5 leaves, and the run produces 5 measured rows plus one binary image and one outline image for the full scene
 - `Thumbnails`: the same image still produces 5 measured rows, but also exports 5 individual leaf crops plus per-leaf binary and outline artifacts
+
+### Automatic Repair Behavior
+
+`leaf-measure` preserves the published FAMeLeS path by default and only applies repairs when it detects a specific artifact pattern.
+
+- `Full image`: if the binary mask shows an edge-connected background region enclosing the leaves, the run removes that artifact and re-measures the corrected mask
+- `Thumbnails`: the run first performs a lightweight preflight on the source image to detect strong dark-edge artifacts; affected scans go straight to the stable repair path, while unaffected images continue to use the original FAMeLeS thumbnails macro path
+- this avoids an unnecessary full-image probe on clean thumbnail jobs
+
+After each run, check:
+
+- `run_summary.md` to see whether automatic repair was triggered
+- `method_summary.md` to see whether the run stayed on the original path or used the repair path
+- binary and outline outputs for a quick visual review
 
 ### For Agent Users
 
@@ -498,6 +530,7 @@ python -m engine.cli analyze --input "D:\path\to\images" --output "D:\path\to\ru
 Each run writes:
 
 - `results.csv`
+- `results_fameles_particles_raw.csv` when `Thumbnails` also needs to preserve the original particle-level table
 - `manifest.json`
 - `run_summary.md`
 - `method_summary.md`
@@ -507,6 +540,8 @@ Mode-specific folders:
 
 - `full`: `01b_bandpass/`, `01c_contrasted/`, `02_area/`, `03_outline/`
 - `thumbnails`: `01a_bandpass/`, `01b_contrasted/`, `02_thumbnails/`, `03_area/`, `04_outline/`
+
+In `Thumbnails` mode, `leaf-measure` writes `results.csv` as one row per exported leaf artifact. If the original FAMeLeS second-stage measurement detects multiple particles inside an exported thumbnail, the raw particle-level table is preserved separately as `results_fameles_particles_raw.csv`.
 
 ### Validation
 
@@ -525,7 +560,8 @@ Current tests cover:
 - runtime resolution
 - macro patching
 - `Full image` reproduction against golden outputs from the external assets directory
-- `Thumbnails` execution and artifact generation
+- `Thumbnails` reproduction against golden outputs from the external assets directory
+- unit coverage for the automatic repair path on artifact-heavy masks
 
 Run the suite with:
 
