@@ -73,6 +73,31 @@
 
 如果你平时就是对 Codex / Claude Code 说一句话来完成安装和分析，这个仓库应该这样用：
 
+#### 最快路径：从 GitHub 安装 Skill
+
+1. 让 agent 的 skill installer 直接安装：
+   - repo: `Rimagination/leaf-measure`
+   - path: `skills/leaf-measure`
+2. 安装后重启 Codex，或刷新技能列表
+3. 然后对 agent 说：
+
+```text
+Use leaf-measure to analyze this folder. If I have not specified Full image or Thumbnails, explain the difference and ask me to choose. Then report area, perimeter, length, width, circularity, and solidity.
+```
+
+这条路径已经做过真实验证：
+- skill 会安装到 `$CODEX_HOME/skills/leaf-measure`
+- 首次运行时会把共享仓库拉到 `$CODEX_HOME/vendor/leaf-measure`
+- 然后自动 bootstrap 并输出 `results.csv`
+
+#### 最快路径：直接打开仓库
+
+如果你已经打开了这个仓库作为工作区，最短路径是先让 agent 跑：
+
+```text
+Run .\scripts\bootstrap.ps1 to install Python dependencies for the current environment, download Fiji if it is missing, fetch the public Figshare assets if they are missing, and write a machine-readable doctor report.
+```
+
 1. 让 agent 打开这个仓库作为工作区
 2. 对 agent 说：
 
@@ -455,6 +480,31 @@ After each run, check:
 ### For Agent Users
 
 If you normally install and use projects by telling Codex or Claude Code to do it for you, this repository should be used that way.
+
+#### Quick Install From GitHub
+
+1. Ask your agent's skill installer to install:
+   - repo: `Rimagination/leaf-measure`
+   - path: `skills/leaf-measure`
+2. Restart Codex or refresh the skill list
+3. Then tell the agent:
+
+```text
+Use leaf-measure to analyze this folder. If I have not specified Full image or Thumbnails, explain the difference and ask me to choose. Then report area, perimeter, length, width, circularity, and solidity.
+```
+
+This path has been validated end-to-end:
+- the skill installs into `$CODEX_HOME/skills/leaf-measure`
+- first use clones the shared repo into `$CODEX_HOME/vendor/leaf-measure`
+- then it bootstraps the runtime and produces `results.csv`
+
+#### Quick Start Inside The Repository
+
+If the repository is already open as the workspace, the shortest path is to tell the agent:
+
+```text
+Run .\scripts\bootstrap.ps1 to install Python dependencies for the current environment, download Fiji if it is missing, fetch the public Figshare assets if they are missing, and write a machine-readable doctor report.
+```
 
 Open the repository as the workspace and say:
 
