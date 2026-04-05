@@ -3,6 +3,7 @@
 基于已发表 FAMeLeS 方法的叶片形态测量仓库与 Skill。它把 Fiji 宏工作流包装成可由 agent 调用、可在新数据上复用、并且可验证的分析流程。
 这个仓库包含共享 Python engine 和 canonical skill 源，不是只有一个独立 skill 包。
 `.agents/` 与 `.claude/` 下的 repo-local skills 由 `bootstrap` 或 `sync-skills` 在本地生成，不再作为 GitHub 上的长期跟踪目录。
+当前发布说明见 [docs/releases/v0.1.0.md](docs/releases/v0.1.0.md)。
 
 ![leaf-measure cover](docs/assets/cover.jpg)
 
@@ -422,6 +423,7 @@ python -m pytest tests -q
 `leaf-measure` packages the published Fiji-based FAMeLeS workflow into a repo and skill that agents can run on new folders of leaf images.
 It is a shared Python engine plus a canonical skill source, not only a standalone skill package.
 Repo-local `.agents/` and `.claude/` skills are generated locally by `bootstrap` or `sync-skills` rather than kept as permanent tracked directories on GitHub.
+The current release note is [docs/releases/v0.1.0.md](docs/releases/v0.1.0.md).
 
 ![leaf-measure cover](docs/assets/cover.jpg)
 
