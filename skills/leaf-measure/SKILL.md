@@ -10,7 +10,7 @@ Use this skill to run the shared `leaf-measure` engine, not to re-implement the 
 This skill supports two host patterns:
 
 - repo-local: the current workspace is the `leaf-measure` repository
-- standalone installed skill: the skill lives under `$CODEX_HOME/skills/leaf-measure` and uses `scripts/setup_and_analyze.py` to clone or update the shared repo cache under `$CODEX_HOME/vendor/leaf-measure`
+- standalone installed skill: the skill lives under `$CODEX_HOME/skills/leaf-measure` and uses `scripts/setup_and_analyze.py` to clone or update the shared repo cache under `$CODEX_HOME/vendor/leaf-measure`, then sync the installed skill to the latest canonical bundle
 
 ## Workflow
 
@@ -18,7 +18,7 @@ This skill supports two host patterns:
 2. If the user did not specify a mode, explain `Full image` vs `Thumbnails` using `references/mode-selection.md` and ask them to choose.
 3. Before analysis, make sure the runtime exists:
    - repo-local: prefer `.\scripts\bootstrap.ps1` on Windows because it installs the current Python dependencies, downloads Fiji if missing, and fetches the public Figshare assets if missing
-   - standalone installed skill: run `python scripts/setup_and_analyze.py analyze ...`; that helper clones or updates the shared repo cache, runs `doctor`, and bootstraps the runtime on first use when needed
+   - standalone installed skill: run `python scripts/setup_and_analyze.py analyze ...`; that helper clones or updates the shared repo cache, refreshes the installed skill from the latest canonical `skills/leaf-measure/`, runs `doctor`, and bootstraps the runtime on first use when needed
    - if only the upstream package is missing in a repo-local workspace, run `python -m engine.cli fetch-assets`
    - if you must pass Fiji explicitly, `--fiji` may be either a Fiji directory or a launcher path such as `ImageJ-win64.exe`
 4. Run the shared CLI from the repository root:
@@ -43,6 +43,18 @@ or
 
 ```powershell
 python scripts/setup_and_analyze.py analyze --input "<folder>" --output "<run-dir>" --mode thumbnails
+```
+
+If the user says the installed skill still behaves like an older version, refresh it explicitly:
+
+```powershell
+python scripts/setup_and_analyze.py self-update
+```
+
+If you are inside the repository itself and want to refresh the global installation from the canonical source, run:
+
+```powershell
+python -m engine.cli update-skill
 ```
 
 5. Read `manifest.json`, `results.csv`, `run_summary.md`, and the output folders before answering.

@@ -7,6 +7,7 @@ from pathlib import Path
 import subprocess
 import sys
 import tempfile
+import shutil
 
 
 REPO_URL = "https://github.com/Rimagination/leaf-measure.git"
@@ -21,8 +22,41 @@ def default_repo_dir() -> Path:
     return (codex_home() / "vendor" / "leaf-measure").resolve()
 
 
+def installed_skill_dir() -> Path:
+    return Path(__file__).resolve().parents[1]
+
+
 def run(command: list[str], *, cwd: Path | None = None) -> subprocess.CompletedProcess[str]:
     return subprocess.run(command, cwd=str(cwd) if cwd else None, capture_output=True, text=True)
+
+
+def _remove_path(path: Path) -> None:
+    if path.is_dir():
+        shutil.rmtree(path)
+    elif path.exists():
+        path.unlink()
+
+
+def _sync_tree(source: Path, target: Path) -> None:
+    target.mkdir(parents=True, exist_ok=True)
+    source_entries = {entry.name: entry for entry in source.iterdir()}
+    target_entries = {entry.name: entry for entry in target.iterdir()}
+
+    for name, target_entry in target_entries.items():
+        if name not in source_entries:
+            _remove_path(target_entry)
+
+    for name, source_entry in source_entries.items():
+        target_entry = target / name
+        if source_entry.is_dir():
+            if target_entry.exists() and not target_entry.is_dir():
+                _remove_path(target_entry)
+            _sync_tree(source_entry, target_entry)
+        else:
+            if target_entry.exists() and target_entry.is_dir():
+                _remove_path(target_entry)
+            target_entry.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source_entry, target_entry)
 
 
 def ensure_repo(*, repo_dir: Path | None = None, ref: str = DEFAULT_REF, update: bool = True) -> Path:
@@ -42,6 +76,17 @@ def ensure_repo(*, repo_dir: Path | None = None, ref: str = DEFAULT_REF, update:
     if result.returncode != 0:
         raise RuntimeError(result.stderr.strip() or result.stdout.strip() or "git clone failed")
     return repo_dir
+
+
+def refresh_installed_skill(repo_dir: Path, *, skill_dir: Path | None = None, skill_name: str = "leaf-measure") -> Path:
+    repo_dir = repo_dir.resolve()
+    source = repo_dir / "skills" / skill_name
+    if not source.exists():
+        raise RuntimeError(f"Canonical skill source not found in repo cache: {source}")
+
+    target = (skill_dir or installed_skill_dir()).resolve()
+    _sync_tree(source, target)
+    return target
 
 
 def doctor_payload(repo_dir: Path) -> dict:
@@ -139,6 +184,14 @@ def parse_args() -> argparse.Namespace:
     ensure.add_argument("--ref", default=DEFAULT_REF)
     ensure.add_argument("--skip-update", action="store_true")
 
+    self_update = subparsers.add_parser(
+        "self-update",
+        help="Update the cached shared repo and refresh this installed leaf-measure skill in place.",
+    )
+    self_update.add_argument("--repo-dir", type=Path)
+    self_update.add_argument("--ref", default=DEFAULT_REF)
+    self_update.add_argument("--skip-update", action="store_true")
+
     analyze = subparsers.add_parser("analyze", help="Ensure the repo/runtime exists, then run analysis.")
     analyze.add_argument("--input", type=Path, required=True)
     analyze.add_argument("--output", type=Path, required=True)
@@ -155,8 +208,15 @@ def main() -> int:
         repo_dir = ensure_repo(repo_dir=args.repo_dir, ref=args.ref, update=not args.skip_update)
         print(repo_dir)
         return 0
+    if args.command == "self-update":
+        repo_dir = ensure_repo(repo_dir=args.repo_dir, ref=args.ref, update=not args.skip_update)
+        refreshed = refresh_installed_skill(repo_dir)
+        print(refreshed)
+        return 0
     if args.command == "analyze":
         repo_dir = ensure_repo(repo_dir=args.repo_dir, ref=args.ref, update=not args.skip_update)
+        if not args.skip_update:
+            refresh_installed_skill(repo_dir, skill_dir=installed_skill_dir())
         payload = ensure_runtime(repo_dir)
         if not payload.get("ok"):
             raise RuntimeError("Runtime is still not ready after bootstrap.")

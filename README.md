@@ -89,6 +89,7 @@ Use leaf-measure to analyze this folder. If I have not specified Full image or T
 这条路径已经做过真实验证：
 - skill 会安装到 `$CODEX_HOME/skills/leaf-measure`
 - 首次运行时会把共享仓库拉到 `$CODEX_HOME/vendor/leaf-measure`
+- 后续运行默认会先刷新共享仓库，并把已安装 skill 同步到最新 canonical 内容
 - 然后自动 bootstrap 并输出 `results.csv`
 
 #### 最快路径：直接打开仓库
@@ -131,8 +132,20 @@ python -m engine.cli install-skill
 ```
 
 默认会安装到 `$CODEX_HOME/skills/leaf-measure`（未设置 `CODEX_HOME` 时为 `~/.codex/skills/leaf-measure`）。
-安装后，skill 自带的 `scripts/setup_and_analyze.py` 会在首次运行时把共享仓库克隆或更新到 `$CODEX_HOME/vendor/leaf-measure`，然后自动执行 `doctor` 和 `bootstrap`。
+安装后，skill 自带的 `scripts/setup_and_analyze.py` 会在分析前先更新共享仓库缓存，并把当前已安装 skill 同步到仓库里的 canonical `skills/leaf-measure/`，然后自动执行 `doctor` 和 `bootstrap`。
 如果你打开的是仓库本身，`.\scripts\bootstrap.ps1` 也会自动把 canonical `skills/` 同步到本地 `.agents/` 和 `.claude/`。
+
+如果你想显式刷新已安装 skill，而不是等到下一次分析时自动同步，可以运行：
+
+```powershell
+python scripts/setup_and_analyze.py self-update
+```
+
+如果你当前就在仓库里，也可以直接刷新全局安装副本：
+
+```powershell
+python -m engine.cli update-skill
+```
 
 如果你想直接从 GitHub 安装这个独立 skill，而不是先 clone 整个仓库，请让 agent 的 skill installer 安装：
 
@@ -498,6 +511,7 @@ Use leaf-measure to analyze this folder. If I have not specified Full image or T
 This path has been validated end-to-end:
 - the skill installs into `$CODEX_HOME/skills/leaf-measure`
 - first use clones the shared repo into `$CODEX_HOME/vendor/leaf-measure`
+- later runs refresh the shared repo cache and sync the installed skill to the latest canonical bundle
 - then it bootstraps the runtime and produces `results.csv`
 
 #### Quick Start Inside The Repository
@@ -539,8 +553,20 @@ python -m engine.cli install-skill
 ```
 
 By default this installs to `$CODEX_HOME/skills/leaf-measure` (or `~/.codex/skills/leaf-measure` when `CODEX_HOME` is unset).
-The bundled `scripts/setup_and_analyze.py` helper then clones or updates the shared repo cache under `$CODEX_HOME/vendor/leaf-measure` and runs `doctor` plus `bootstrap` on first use.
+The bundled `scripts/setup_and_analyze.py` helper then clones or updates the shared repo cache under `$CODEX_HOME/vendor/leaf-measure`, refreshes the installed skill from the latest canonical `skills/leaf-measure/`, and runs `doctor` plus `bootstrap` when needed.
 If you are working inside the repository itself, `.\scripts\bootstrap.ps1` also syncs the canonical `skills/` directory into local `.agents/` and `.claude/` host directories.
+
+If you want to refresh the installed skill explicitly instead of waiting for the next analysis run to sync it, run:
+
+```powershell
+python scripts/setup_and_analyze.py self-update
+```
+
+If you are already inside the repository, you can also refresh the global install directly:
+
+```powershell
+python -m engine.cli update-skill
+```
 
 If you want to install the standalone skill directly from GitHub instead of cloning the repository first, tell your agent's skill installer to install:
 

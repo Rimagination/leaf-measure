@@ -97,6 +97,14 @@ def parse_args() -> argparse.Namespace:
     install_skill_parser.add_argument("--repo-root", type=Path)
     install_skill_parser.add_argument("--skill-name", default="leaf-measure")
     install_skill_parser.add_argument("--destination", type=Path)
+
+    update_skill_parser = subparsers.add_parser(
+        "update-skill",
+        help="Refresh an existing global leaf-measure skill installation from the canonical repo source.",
+    )
+    update_skill_parser.add_argument("--repo-root", type=Path)
+    update_skill_parser.add_argument("--skill-name", default="leaf-measure")
+    update_skill_parser.add_argument("--destination", type=Path)
     return parser.parse_args()
 
 
@@ -637,6 +645,14 @@ def main() -> int:
                 print(path)
             return 0
         if args.command == "install-skill":
+            installed = install_skill(
+                args.repo_root or repo_root(),
+                args.skill_name,
+                args.destination or default_skill_install_root(),
+            )
+            print(installed)
+            return 0
+        if args.command == "update-skill":
             installed = install_skill(
                 args.repo_root or repo_root(),
                 args.skill_name,

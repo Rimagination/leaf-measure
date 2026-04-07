@@ -20,6 +20,35 @@ def canonical_skill_dir(repo_root: Path, skill_name: str) -> Path:
     return repo_root / "skills" / skill_name
 
 
+def _remove_path(path: Path) -> None:
+    if path.is_dir():
+        shutil.rmtree(path)
+    elif path.exists():
+        path.unlink()
+
+
+def _sync_tree(source: Path, target: Path) -> None:
+    target.mkdir(parents=True, exist_ok=True)
+    source_entries = {entry.name: entry for entry in source.iterdir()}
+    target_entries = {entry.name: entry for entry in target.iterdir()}
+
+    for name, target_entry in target_entries.items():
+        if name not in source_entries:
+            _remove_path(target_entry)
+
+    for name, source_entry in source_entries.items():
+        target_entry = target / name
+        if source_entry.is_dir():
+            if target_entry.exists() and not target_entry.is_dir():
+                _remove_path(target_entry)
+            _sync_tree(source_entry, target_entry)
+        else:
+            if target_entry.exists() and target_entry.is_dir():
+                _remove_path(target_entry)
+            target_entry.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source_entry, target_entry)
+
+
 def sync_skill(repo_root: Path, skill_name: str) -> list[Path]:
     repo_root = repo_root.resolve()
     source = canonical_skill_dir(repo_root, skill_name)
@@ -29,10 +58,8 @@ def sync_skill(repo_root: Path, skill_name: str) -> list[Path]:
     targets: list[Path] = []
     for host in SKILL_HOSTS:
         target = repo_root / host / skill_name
-        if target.exists():
-            shutil.rmtree(target)
         target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copytree(source, target)
+        _sync_tree(source, target)
         targets.append(target)
     return targets
 
@@ -67,7 +94,5 @@ def install_skill(repo_root: Path, skill_name: str, destination_root: Path) -> P
     destination_root = destination_root.resolve()
     destination_root.mkdir(parents=True, exist_ok=True)
     target = destination_root / skill_name
-    if target.exists():
-        shutil.rmtree(target)
-    shutil.copytree(source, target)
+    _sync_tree(source, target)
     return target.resolve()
