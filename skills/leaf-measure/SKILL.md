@@ -50,6 +50,8 @@ python scripts/setup_and_analyze.py analyze --input "<folder>" --output "<run-di
    - what was measured
    - which mode was used
    - that `results.csv` is the user-facing table and `results_fameles_particles_raw.csv` preserves the original Fiji particle-level table when present
+   - for `Full image`, whether the run had to correct a hole-dominated mask polarity before writing the user-facing table
+   - for `Full image`, whether a conservative crop-rescue pass was needed to recover missed large leaf objects by rerunning the original `Full image` macro on candidate crop regions
    - that outputs are in pixels by default
    - whether DPI metadata was found
    - whether automatic repair was triggered for a mask artifact

@@ -734,7 +734,8 @@ Mode-specific folders:
 
 Reporting behavior:
 
-- `Full image`: `results.csv` is the cleaned user-facing table. If an oversized background particle is removed from the user-facing table, the untouched Fiji output is kept as `results_fameles_particles_raw.csv`.
+- `Full image`: `results.csv` is the cleaned user-facing table. When a full-image mask looks hole-dominated, `leaf-measure` keeps the original Fiji table in `results_fameles_particles_raw.csv`, then re-measures that mask with corrected polarity for the user-facing `results.csv`.
+- if that same repaired mask still appears to have missed large leaf objects, `leaf-measure` reruns the original `Full image` macro on a small number of conservative crop regions for the user-facing measurement pass instead of switching to a separate segmentation algorithm
 - `Thumbnails`: `results.csv` is one row per exported leaf artifact. If the original FAMeLeS second-stage measurement detects multiple particles inside an exported thumbnail, the raw particle-level table is preserved separately as `results_fameles_particles_raw.csv`.
 
 Filename handling:

@@ -51,6 +51,13 @@ def _manual_results_export_block(results_csv: Path) -> list[str]:
     ]
 
 
+def _invert_selected_files_line(invert_files: list[str] | None) -> str | None:
+    if not invert_files:
+        return None
+    conditions = " || ".join(f'file2=="{name}"' for name in sorted(set(invert_files)))
+    return f'if ({conditions}) run("Invert");'
+
+
 def build_full_macro(
     *,
     template_path: Path,
@@ -130,7 +137,10 @@ def build_full_measurement_macro(
     area_dir: Path,
     outline_dir: Path,
     results_csv: Path,
+    invert_files: list[str] | None = None,
+    normalize_binary: bool = False,
 ) -> str:
+    invert_line = _invert_selected_files_line(invert_files)
     return "\n".join(
         [
             f'outputdir1 = "{macro_string(area_dir)}";',
@@ -141,6 +151,8 @@ def build_full_measurement_macro(
             "for (i=0; i<list2.length; i++) {",
             " file2 = list2[i];",
             "  open(outputdir1+file2);",
+            *(["  run(\"8-bit\");", "  setThreshold(128, 255);", "  run(\"Convert to Mask\");"] if normalize_binary else []),
+            *(["  " + invert_line] if invert_line else []),
             'run("Set Measurements...", "area perimeter feret\'s shape display redirect=None decimal=2");',
             'run("Analyze Particles...", "size=80-Infinity show=Outlines display composite exclude");',
             'saveAs("png", outputdir2+list2[i]);',

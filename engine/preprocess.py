@@ -100,6 +100,8 @@ def restore_staged_name(name: str, filename_map: dict[str, str]) -> str:
     for staged_name, original_name in filename_map.items():
         staged_stem = Path(staged_name).stem
         original_stem = Path(original_name).stem
+        if Path(name).stem == staged_stem and Path(name).suffix:
+            return f"{original_stem}{Path(name).suffix}"
         if name == staged_stem:
             return original_stem
         if name.startswith(f"{staged_stem}_"):

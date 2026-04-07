@@ -6,7 +6,7 @@ If the machine is missing upstream macros or Fiji, prefer `.\scripts\bootstrap.p
 
 Automatic repair depends on mode:
 
-- `Full image`: the repair removes an edge-connected background artifact after the binary mask is produced and then re-runs measurement on the corrected mask.
+- `Full image`: the repair keeps the published macro path first. If the saved binary mask is hole-dominated, `leaf-measure` fixes the measurement polarity for the user-facing table. In sparse edge cases it may compare both polarities against the source image to choose the foreground interpretation that better matches darker leaf material. If that repaired mask still appears to miss large leaf objects, `leaf-measure` reruns the original `Full image` macro on a small number of candidate crop regions and only merges newly recovered, non-edge-touching foreground objects before the final user-facing measurement pass.
 - `Thumbnails`: the workflow first runs a lightweight preflight on the source image. If strong dark-edge artifacts are detected, it switches to the stable repair path; otherwise it stays on the original FAMeLeS thumbnails macro path.
 
 When summarizing a run for the user:

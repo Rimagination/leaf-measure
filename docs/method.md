@@ -21,6 +21,7 @@ Default units are pixels. If image DPI metadata is available, the product report
 For normal images, `leaf-measure` keeps the original FAMeLeS execution path.
 
 - In `Full image` mode, repair is triggered when the binary mask shows an edge-connected background artifact enclosing many interior leaf objects.
+- In sparse or single-object edge cases, `leaf-measure` may also compare the two possible mask polarities against the source image itself and keep the polarity whose foreground pixels better match the darker leaf material.
 - In `Thumbnails` mode, the workflow uses a lightweight preflight on the source image to detect strong dark-edge artifacts. Affected scans go directly to the stable repair path; unaffected scans keep the original FAMeLeS thumbnails macro path.
 
 This is intended to fix scanner-border and polarity-related failures without silently changing the published workflow on unaffected inputs, and without paying a full-image probe cost on clean thumbnail runs.
@@ -34,10 +35,15 @@ This keeps the original Fiji particle table available for traceability while giv
 
 For `Full image`, the same split now exists when needed:
 
-- `results.csv`: the user-facing table after filtering an obviously oversized background particle from the final report
+- `results.csv`: the user-facing table after correcting hole-dominated mask polarity when needed, then filtering an obviously oversized background particle from the final report
 - `results_fameles_particles_raw.csv`: the untouched Fiji measurement table
 
-This preserves published-method traceability while preventing a single background row from dominating the user-facing report.
+This preserves published-method traceability while preventing two known full-image failure modes from dominating the user-facing report:
+
+- a single oversized background row
+- compound-leaf masks whose internal voids would otherwise be measured instead of the compound leaves
+
+For the same narrow class of repaired full-image masks, `leaf-measure` may also add a conservative crop-rescue pass before the user-facing re-measurement step. In that pass, `leaf-measure` reruns the original FAMeLeS `Full image` macro on a small number of candidate crop regions and only merges newly recovered, non-edge-touching foreground objects back into the repaired full-image mask. This does not change the original raw Fiji table.
 
 For setup, the repository now exposes two public helper commands:
 

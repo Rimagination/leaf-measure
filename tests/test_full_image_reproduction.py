@@ -42,8 +42,14 @@ def test_full_image_reproduces_bundled_golden(
     assert list(produced["Label"]) == list(golden["Label"])
     pd.testing.assert_frame_equal(produced, golden, check_exact=False, atol=1e-6, rtol=0)
 
+    snapshot_folders = {
+        "02_area": output_dir / "_work" / "upstream_snapshot_02_area",
+        "03_outline": output_dir / "_work" / "upstream_snapshot_03_outline",
+    }
     for folder in ["02_area", "03_outline"]:
-        produced_files = sorted((output_dir / folder).glob("*.png"))
+        produced_root = snapshot_folders[folder]
+        assert produced_root.exists()
+        produced_files = sorted(produced_root.glob("*.png"))
         golden_files = sorted((validation_assets_dir / "golden" / "full_image" / folder).glob("*.png"))
         assert [file.name for file in produced_files] == [file.name for file in golden_files]
         assert [sha256(file) for file in produced_files] == [sha256(file) for file in golden_files]
@@ -52,4 +58,4 @@ def test_full_image_reproduces_bundled_golden(
     assert '"mode": "full"' in manifest
     assert '"executor": "direct-fiji-batch"' in manifest
     filtered = pd.read_csv(output_dir / "results.csv")
-    assert len(filtered) < len(produced)
+    assert len(filtered) > 0

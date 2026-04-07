@@ -78,4 +78,5 @@ def test_stage_input_images_stages_non_ascii_names_to_ascii(tmp_path: Path) -> N
     assert staged_files == ["input_0001.tiff"]
     assert report.filename_map == {"input_0001.tiff": "阿尔泰狗娃花.tiff"}
     assert restore_staged_name("input_0001.tiff", report.filename_map) == "阿尔泰狗娃花.tiff"
+    assert restore_staged_name("input_0001.png", report.filename_map) == "阿尔泰狗娃花.png"
     assert restore_staged_name("input_0001_01.png", report.filename_map) == "阿尔泰狗娃花_01.png"

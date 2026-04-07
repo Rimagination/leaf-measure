@@ -6,9 +6,17 @@ import shutil
 from pathlib import Path
 import sys
 
+import numpy as np
+from PIL import Image
+
 from engine.dpi import collect_dpi_metadata
 from engine.errors import LeafMeasureError, write_failure_report
 from engine.executors import run_batch_macro
+from engine.full_mask_polarity import (
+    analyze_full_measurement_mask_polarity,
+    select_full_measurement_inversion_files,
+)
+from engine.full_mask_recovery import recover_missing_full_mask_leaves
 from engine.macros import (
     build_full_macro,
     build_full_measurement_macro,
@@ -142,6 +150,54 @@ def copy_files(source_dir: Path, dest_dir: Path) -> None:
             shutil.copy2(path, dest_dir / path.name)
 
 
+def _load_leaf_foreground_from_macro_mask(mask_path: Path) -> np.ndarray:
+    decision = analyze_full_measurement_mask_polarity(mask_path)
+    image = np.array(Image.open(mask_path).convert("L"))
+    return image >= 128 if decision.should_invert else image < 128
+
+
+def _build_full_crop_mask_provider(runtime) -> callable:
+    def provider(source_path: Path, box: tuple[int, int, int, int], work_dir: Path) -> np.ndarray | None:
+        if work_dir.exists():
+            clear_directory(work_dir)
+        work_dir.mkdir(parents=True, exist_ok=True)
+
+        input_dir = work_dir / "input"
+        bandpass_dir = work_dir / "bandpass"
+        contrasted_dir = work_dir / "contrasted"
+        area_dir = work_dir / "area"
+        outline_dir = work_dir / "outline"
+        for path in (input_dir, bandpass_dir, contrasted_dir, area_dir, outline_dir):
+            path.mkdir(parents=True, exist_ok=True)
+
+        x0, y0, x1, y1 = box
+        crop_path = input_dir / source_path.name
+        with Image.open(source_path) as image:
+            image.crop((x0, y0, x1, y1)).save(crop_path)
+
+        crop_results_csv = work_dir / "results.csv"
+        run_batch_macro(
+            fiji_path=runtime.fiji_launcher,
+            macro_text=build_full_macro(
+                template_path=original_macro(runtime.assets_dir, "full"),
+                input_dir=input_dir,
+                bandpass_dir=bandpass_dir,
+                contrasted_dir=contrasted_dir,
+                area_dir=area_dir,
+                outline_dir=outline_dir,
+                results_csv=crop_results_csv,
+            ),
+            work_dir=work_dir / "macro_run",
+        )
+
+        area_masks = sorted(area_dir.glob("*.png"))
+        if not area_masks:
+            return None
+        return _load_leaf_foreground_from_macro_mask(area_masks[0])
+
+    return provider
+
+
 def analyze(args: argparse.Namespace) -> int:
     runtime = resolve_runtime(
         cli_fiji_dir=args.fiji,
@@ -235,19 +291,56 @@ def analyze(args: argparse.Namespace) -> int:
 
     normalize_results_csv(initial_results_csv)
     corrected_mask_files: list[str] = []
+    polarity_normalized_files: list[str] = []
+    recovered_mask_files: list[str] = []
+    deferred_full_results = False
+    raw_full_area_snapshot: Path | None = None
+    raw_full_outline_snapshot: Path | None = None
     if args.mode == "full":
+        raw_full_area_snapshot = outputs["work"] / "upstream_snapshot_02_area"
+        raw_full_outline_snapshot = outputs["work"] / "upstream_snapshot_03_outline"
+        raw_full_area_snapshot.mkdir(parents=True, exist_ok=True)
+        raw_full_outline_snapshot.mkdir(parents=True, exist_ok=True)
+        copy_files(outputs["area"], raw_full_area_snapshot)
+        copy_files(outputs["outline"], raw_full_outline_snapshot)
         correction = correct_full_masks(outputs["area"])
         corrected_mask_files = correction.corrected_files
+        polarity_report = select_full_measurement_inversion_files(
+            outputs["area"],
+            source_image_dir=staged_input.staged_dir,
+        )
+        polarity_normalized_files = polarity_report.invert_files
+        recovery_report = recover_missing_full_mask_leaves(
+            source_image_dir=staged_input.staged_dir,
+            area_dir=outputs["area"],
+            target_files=polarity_normalized_files,
+            crop_mask_provider=_build_full_crop_mask_provider(runtime),
+            work_dir=outputs["work"] / "recovery_crop_reruns",
+        )
+        recovered_mask_files = recovery_report.corrected_files
+        full_measurement_csv = raw_results_csv
         if corrected_mask_files:
             warnings.append(
                 f"Corrected {len(corrected_mask_files)} binary mask(s) by removing edge-connected background regions before measurement."
             )
+        if polarity_normalized_files:
+            warnings.append(
+                f"Normalized full-image measurement polarity for {len(polarity_normalized_files)} mask(s) during the user-facing measurement pass. The original Fiji particle table remains available in results_fameles_particles_raw.csv."
+            )
+        if recovered_mask_files:
+            warnings.append(
+                f"Recovered missed full-image leaf object(s) for {len(recovered_mask_files)} mask(s) by rerunning the original Full image macro on conservative candidate crop regions before user-facing measurement."
+            )
+        if corrected_mask_files or polarity_normalized_files or recovered_mask_files:
+            full_measurement_csv = outputs["work"] / "full_measurement_corrected.csv"
             rerun = run_batch_macro(
                 fiji_path=runtime.fiji_launcher,
                 macro_text=build_full_measurement_macro(
                     area_dir=outputs["area"],
                     outline_dir=outputs["outline"],
-                    results_csv=raw_results_csv,
+                    results_csv=full_measurement_csv,
+                    invert_files=polarity_normalized_files,
+                    normalize_binary=True,
                 ),
                 work_dir=outputs["work"] / "measurement_rerun",
             )
@@ -256,25 +349,27 @@ def analyze(args: argparse.Namespace) -> int:
                 warnings.append(
                     f"Fiji returned exit code {rerun.exit_code} during corrected-mask measurement rerun."
                 )
-            normalize_results_csv(raw_results_csv)
-        full_raw_frame = normalize_results_csv(raw_results_csv)
-        full_frame, filter_report = filter_full_image_results(full_raw_frame, area_dir=outputs["area"])
-        full_frame.to_csv(results_csv, index=False)
-        if filter_report.dropped_rows:
-            warnings.append(
-                f"Removed {len(filter_report.dropped_rows)} edge-connected background particle row(s) from the user-facing full-image results table. The unfiltered Fiji output is preserved in results_fameles_particles_raw.csv."
+            normalize_results_csv(full_measurement_csv)
+        deferred_full_results = bool(recovered_mask_files)
+        if not deferred_full_results:
+            full_raw_frame = normalize_results_csv(full_measurement_csv)
+            full_frame, filter_report = filter_full_image_results(full_raw_frame, area_dir=outputs["area"])
+            full_frame.to_csv(results_csv, index=False)
+            if filter_report.dropped_rows:
+                warnings.append(
+                    f"Removed {len(filter_report.dropped_rows)} edge-connected background particle row(s) from the user-facing full-image results table. The unfiltered Fiji output is preserved in results_fameles_particles_raw.csv."
+                )
+            warning_frame = full_frame.copy()
+            if staged_input.filename_map and "Label" in warning_frame.columns:
+                warning_frame["Label"] = warning_frame["Label"].map(
+                    lambda value: restore_staged_name(str(value), staged_input.filename_map)
+                )
+            warnings.extend(
+                full_image_sanity_warnings(
+                    warning_frame,
+                    image_areas=image_area_map(args.input),
+                )
             )
-        warning_frame = full_frame.copy()
-        if staged_input.filename_map and "Label" in warning_frame.columns:
-            warning_frame["Label"] = warning_frame["Label"].map(
-                lambda value: restore_staged_name(str(value), staged_input.filename_map)
-            )
-        warnings.extend(
-            full_image_sanity_warnings(
-                warning_frame,
-                image_areas=image_area_map(args.input),
-            )
-        )
     elif should_prefer_thumbnail_repair(staged_input):
         correction = correct_full_masks(temp_full_area)
         corrected_mask_files = correction.corrected_files
@@ -375,6 +470,40 @@ def analyze(args: argparse.Namespace) -> int:
         ],
         staged_input.filename_map,
     )
+    if args.mode == "full" and deferred_full_results:
+        final_results_csv = outputs["work"] / "full_measurement_final.csv"
+        final_invert_files = [
+            restore_staged_name(name, staged_input.filename_map) for name in polarity_normalized_files
+        ]
+        final_rerun = run_batch_macro(
+            fiji_path=runtime.fiji_launcher,
+            macro_text=build_full_measurement_macro(
+                area_dir=outputs["area"],
+                outline_dir=outputs["outline"],
+                results_csv=final_results_csv,
+                invert_files=final_invert_files,
+                normalize_binary=True,
+            ),
+            work_dir=outputs["work"] / "final_measurement_rerun",
+        )
+        execution = final_rerun
+        if final_rerun.exit_code != 0:
+            warnings.append(
+                f"Fiji returned exit code {final_rerun.exit_code} during final full-image measurement rerun."
+            )
+        final_raw_frame = normalize_results_csv(final_results_csv)
+        full_frame, filter_report = filter_full_image_results(final_raw_frame, area_dir=outputs["area"])
+        full_frame.to_csv(results_csv, index=False)
+        if filter_report.dropped_rows:
+            warnings.append(
+                f"Removed {len(filter_report.dropped_rows)} edge-connected background particle row(s) from the user-facing full-image results table. The unfiltered Fiji output is preserved in results_fameles_particles_raw.csv."
+            )
+        warnings.extend(
+            full_image_sanity_warnings(
+                full_frame,
+                image_areas=image_area_map(args.input),
+            )
+        )
     remap_results_labels(results_csv, staged_input.filename_map)
     remap_results_labels(raw_results_csv, staged_input.filename_map)
     dpi_metadata = collect_dpi_metadata(args.input)
@@ -414,8 +543,16 @@ def analyze(args: argparse.Namespace) -> int:
             "preprocessing_modified_files": staged_input.modified_files,
             "filename_map": staged_input.filename_map,
             "corrected_mask_files": display_corrected_mask_files,
+            "polarity_normalized_files": [
+                restore_staged_name(name, staged_input.filename_map) for name in polarity_normalized_files
+            ],
+            "recovered_mask_files": [
+                restore_staged_name(name, staged_input.filename_map) for name in recovered_mask_files
+            ],
             "results_csv": results_csv,
             "raw_results_csv": raw_results_csv if raw_results_csv.exists() else None,
+            "raw_full_area_snapshot": raw_full_area_snapshot,
+            "raw_full_outline_snapshot": raw_full_outline_snapshot,
             "stdout_log": execution.stdout_log,
             "stderr_log": execution.stderr_log,
             "image_count": len(input_files),
