@@ -6,6 +6,7 @@ venv/
 
 config/runtime.toml
 config/doctor.json
+config/runtime-cache.json
 dist/
 build/
 *.egg-info/

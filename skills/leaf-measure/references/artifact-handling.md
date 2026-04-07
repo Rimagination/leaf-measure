@@ -13,5 +13,6 @@ When summarizing a run for the user:
 
 - check `run_summary.md` for whether repair was triggered
 - check `method_summary.md` for whether the run stayed on the original path or used the repair path
-- if `results_fameles_particles_raw.csv` exists, explain that it preserves the original Fiji particle-level table while `results.csv` is normalized to one row per exported thumbnail
+- if `results_fameles_particles_raw.csv` exists, explain that it preserves the original Fiji particle-level table while `results.csv` is the cleaned user-facing table
+- if the run used non-ASCII filenames, mention that leaf-measure staged them internally to ASCII-safe temporary names and restored the original names in the delivered outputs
 - remind the user to visually inspect the binary and outline outputs

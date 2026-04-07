@@ -18,10 +18,17 @@ from engine.macros import (
     original_macro,
 )
 from engine.mask_correction import correct_full_masks
-from engine.preprocess import should_prefer_thumbnail_repair, stage_input_images
+from engine.preprocess import (
+    restore_output_filenames,
+    restore_staged_name,
+    should_prefer_thumbnail_repair,
+    stage_input_images,
+)
 from engine.thumbnail_extraction import extract_thumbnails_from_masks
 from engine.thumbnail_measurements import write_thumbnail_results_csv
 from engine.reporting import (
+    filter_full_image_results,
+    remap_results_labels,
     normalize_results_csv,
     write_manifest,
     write_method_summary,
@@ -158,6 +165,7 @@ def analyze(args: argparse.Namespace) -> int:
         )
 
     if args.mode == "full":
+        initial_results_csv = raw_results_csv
         macro = build_full_macro(
             template_path=original_macro(runtime.assets_dir, "full"),
             input_dir=staged_input.staged_dir,
@@ -165,7 +173,7 @@ def analyze(args: argparse.Namespace) -> int:
             contrasted_dir=outputs["contrasted"],
             area_dir=outputs["area"],
             outline_dir=outputs["outline"],
-            results_csv=results_csv,
+            results_csv=raw_results_csv,
         )
     elif should_prefer_thumbnail_repair(staged_input):
         probe_bandpass = outputs["work"] / "probe_bandpass"
@@ -201,7 +209,7 @@ def analyze(args: argparse.Namespace) -> int:
         initial_results_csv = raw_results_csv
 
     execution = run_batch_macro(
-        fiji_dir=runtime.fiji_dir,
+        fiji_path=runtime.fiji_launcher,
         macro_text=macro,
         work_dir=outputs["work"],
     )
@@ -209,6 +217,7 @@ def analyze(args: argparse.Namespace) -> int:
         warnings.append(f"Fiji returned exit code {execution.exit_code}. Check run logs in _work/.")
     if not initial_results_csv.exists():
         raise LeafMeasureError(
+            stage="results_read",
             code="missing_results_csv",
             message=f"Fiji did not produce the expected results table: {initial_results_csv.name}.",
             hints=[
@@ -234,11 +243,11 @@ def analyze(args: argparse.Namespace) -> int:
                 f"Corrected {len(corrected_mask_files)} binary mask(s) by removing edge-connected background regions before measurement."
             )
             rerun = run_batch_macro(
-                fiji_dir=runtime.fiji_dir,
+                fiji_path=runtime.fiji_launcher,
                 macro_text=build_full_measurement_macro(
                     area_dir=outputs["area"],
                     outline_dir=outputs["outline"],
-                    results_csv=results_csv,
+                    results_csv=raw_results_csv,
                 ),
                 work_dir=outputs["work"] / "measurement_rerun",
             )
@@ -247,12 +256,23 @@ def analyze(args: argparse.Namespace) -> int:
                 warnings.append(
                     f"Fiji returned exit code {rerun.exit_code} during corrected-mask measurement rerun."
                 )
-            normalize_results_csv(results_csv)
-        full_frame = normalize_results_csv(results_csv)
+            normalize_results_csv(raw_results_csv)
+        full_raw_frame = normalize_results_csv(raw_results_csv)
+        full_frame, filter_report = filter_full_image_results(full_raw_frame, area_dir=outputs["area"])
+        full_frame.to_csv(results_csv, index=False)
+        if filter_report.dropped_rows:
+            warnings.append(
+                f"Removed {len(filter_report.dropped_rows)} edge-connected background particle row(s) from the user-facing full-image results table. The unfiltered Fiji output is preserved in results_fameles_particles_raw.csv."
+            )
+        warning_frame = full_frame.copy()
+        if staged_input.filename_map and "Label" in warning_frame.columns:
+            warning_frame["Label"] = warning_frame["Label"].map(
+                lambda value: restore_staged_name(str(value), staged_input.filename_map)
+            )
         warnings.extend(
             full_image_sanity_warnings(
-                full_frame,
-                image_areas=image_area_map(staged_input.staged_dir),
+                warning_frame,
+                image_areas=image_area_map(args.input),
             )
         )
     elif should_prefer_thumbnail_repair(staged_input):
@@ -276,6 +296,7 @@ def analyze(args: argparse.Namespace) -> int:
         )
         if not extraction.exported_files:
             raise LeafMeasureError(
+                stage="result_cleanup",
                 code="thumbnail_extraction_empty",
                 message="Thumbnail repair path did not produce any per-leaf outputs.",
                 hints=[
@@ -288,7 +309,7 @@ def analyze(args: argparse.Namespace) -> int:
                 },
             )
         rerun = run_batch_macro(
-            fiji_dir=runtime.fiji_dir,
+            fiji_path=runtime.fiji_launcher,
             macro_text=build_thumbnail_measurement_macro(
                 area_dir=outputs["area"],
                 outline_dir=outputs["outline"],
@@ -308,6 +329,7 @@ def analyze(args: argparse.Namespace) -> int:
         )
         if not raw_results_csv.exists():
             raise LeafMeasureError(
+                stage="results_read",
                 code="missing_thumbnail_results_csv",
                 message=f"Fiji did not produce the expected thumbnails results table: {raw_results_csv.name}.",
                 hints=[
@@ -324,7 +346,7 @@ def analyze(args: argparse.Namespace) -> int:
             )
         raw_frame = normalize_results_csv(raw_results_csv)
         rerun_outline = run_batch_macro(
-            fiji_dir=runtime.fiji_dir,
+            fiji_path=runtime.fiji_launcher,
             macro_text=build_thumbnail_outline_macro(
                 area_dir=outputs["area"],
                 outline_dir=outputs["outline"],
@@ -342,6 +364,19 @@ def analyze(args: argparse.Namespace) -> int:
                 "The original FAMeLeS thumbnails macro measured multiple particles in at least one exported thumbnail. "
                 "leaf-measure kept that raw particle-level table in results_fameles_particles_raw.csv and wrote a one-row-per-thumbnail table to results.csv."
             )
+
+    restore_output_filenames(
+        [
+            outputs["bandpass"],
+            outputs["contrasted"],
+            outputs["area"],
+            outputs["outline"],
+            *([outputs["thumbnails"]] if "thumbnails" in outputs else []),
+        ],
+        staged_input.filename_map,
+    )
+    remap_results_labels(results_csv, staged_input.filename_map)
+    remap_results_labels(raw_results_csv, staged_input.filename_map)
     dpi_metadata = collect_dpi_metadata(args.input)
     if all(value is None for value in dpi_metadata.values()):
         warnings.append("No DPI metadata was found; results remain in pixels.")
@@ -361,6 +396,10 @@ def analyze(args: argparse.Namespace) -> int:
         dpi_metadata=dpi_metadata,
         warnings=warnings,
     )
+    display_corrected_mask_files = [
+        restore_staged_name(name, staged_input.filename_map) for name in corrected_mask_files
+    ]
+
     write_manifest(
         args.output / "manifest.json",
         {
@@ -369,10 +408,12 @@ def analyze(args: argparse.Namespace) -> int:
             "runtime_source": runtime.source,
             "display_environment": runtime.display_environment,
             "fiji_dir": runtime.fiji_dir,
+            "fiji_launcher": runtime.fiji_launcher,
             "assets_dir": runtime.assets_dir,
             "staged_input_dir": staged_input.staged_dir,
             "preprocessing_modified_files": staged_input.modified_files,
-            "corrected_mask_files": corrected_mask_files,
+            "filename_map": staged_input.filename_map,
+            "corrected_mask_files": display_corrected_mask_files,
             "results_csv": results_csv,
             "raw_results_csv": raw_results_csv if raw_results_csv.exists() else None,
             "stdout_log": execution.stdout_log,
@@ -396,10 +437,12 @@ def doctor(args: argparse.Namespace) -> int:
         "ok": probe.ready,
         "repo_root": probe.repo_root,
         "config_path": probe.config_path,
+        "cache_path": probe.cache_path,
         "runtime_source": probe.source,
         "display_environment": probe.display_environment,
         "python_exe": probe.python_exe,
         "fiji_dir": probe.fiji_dir,
+        "fiji_launcher": probe.fiji_launcher,
         "assets_dir": probe.assets_dir,
         "fiji_candidates": probe.fiji_candidates,
         "assets_candidates": probe.assets_candidates,
@@ -419,6 +462,7 @@ def doctor(args: argparse.Namespace) -> int:
         print(f"ok={probe.ready}")
         print(f"python={probe.python_exe}")
         print(f"fiji={probe.fiji_dir or 'missing'}")
+        print(f"launcher={probe.fiji_launcher or 'missing'}")
         print(f"assets={probe.assets_dir or 'missing'}")
         if probe.issues:
             print(f"issues={','.join(probe.issues)}")
@@ -475,6 +519,7 @@ def main() -> int:
         return 2
     except FileNotFoundError as error:
         wrapped = LeafMeasureError(
+            stage="input_validation",
             code="file_not_found",
             message=str(error),
             hints=["Check the input path and runtime paths in the doctor report."],
@@ -487,6 +532,7 @@ def main() -> int:
         return 2
     except RuntimeError as error:
         wrapped = LeafMeasureError(
+            stage="analysis_execution",
             code="analysis_failed",
             message=str(error),
             hints=[

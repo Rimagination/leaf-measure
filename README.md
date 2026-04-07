@@ -683,6 +683,17 @@ Requirements:
 - a local Fiji installation
 - Windows is the currently validated platform in this repository
 
+Runtime discovery order:
+
+1. explicit CLI paths such as `--fiji` or `--assets`
+2. environment variables
+3. `config/runtime.toml`
+4. `PATH` for Fiji launchers
+5. repo-local and common install directories
+6. the cached last-known-good Fiji launcher in `config/runtime-cache.json`
+
+For Fiji, `--fiji` may point either to a Fiji directory or directly to a launcher such as `ImageJ-win64.exe`, `ImageJ.exe`, or `fiji-windows-x64.exe`.
+
 Configure runtime discovery:
 
 ```powershell
@@ -710,7 +721,7 @@ python -m engine.cli analyze --input "D:\path\to\images" --output "D:\path\to\ru
 Each run writes:
 
 - `results.csv`
-- `results_fameles_particles_raw.csv` when `Thumbnails` also needs to preserve the original particle-level table
+- `results_fameles_particles_raw.csv` when `leaf-measure` preserves the original Fiji particle-level table
 - `manifest.json`
 - `run_summary.md`
 - `method_summary.md`
@@ -721,7 +732,15 @@ Mode-specific folders:
 - `full`: `01b_bandpass/`, `01c_contrasted/`, `02_area/`, `03_outline/`
 - `thumbnails`: `01a_bandpass/`, `01b_contrasted/`, `02_thumbnails/`, `03_area/`, `04_outline/`
 
-In `Thumbnails` mode, `leaf-measure` writes `results.csv` as one row per exported leaf artifact. If the original FAMeLeS second-stage measurement detects multiple particles inside an exported thumbnail, the raw particle-level table is preserved separately as `results_fameles_particles_raw.csv`.
+Reporting behavior:
+
+- `Full image`: `results.csv` is the cleaned user-facing table. If an oversized background particle is removed from the user-facing table, the untouched Fiji output is kept as `results_fameles_particles_raw.csv`.
+- `Thumbnails`: `results.csv` is one row per exported leaf artifact. If the original FAMeLeS second-stage measurement detects multiple particles inside an exported thumbnail, the raw particle-level table is preserved separately as `results_fameles_particles_raw.csv`.
+
+Filename handling:
+
+- non-ASCII input names are staged internally to ASCII-safe temporary names before Fiji runs
+- output images, labels, and final CSVs are mapped back to the original user filenames before delivery
 
 ### Validation
 

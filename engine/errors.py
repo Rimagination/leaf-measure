@@ -10,6 +10,7 @@ from typing import Any
 class LeafMeasureError(Exception):
     code: str
     message: str
+    stage: str = "analysis_execution"
     hints: list[str] = field(default_factory=list)
     details: dict[str, Any] = field(default_factory=dict)
 
@@ -20,12 +21,17 @@ class LeafMeasureError(Exception):
         def convert(value: Any):
             if isinstance(value, Path):
                 return str(value)
+            if isinstance(value, list):
+                return [convert(item) for item in value]
             if isinstance(value, tuple):
                 return list(value)
+            if isinstance(value, dict):
+                return {key: convert(item) for key, item in value.items()}
             return value
 
         return {
             "ok": False,
+            "stage": self.stage,
             "code": self.code,
             "message": self.message,
             "hints": self.hints,

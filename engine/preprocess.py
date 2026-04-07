@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections import deque
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 import shutil
 
@@ -16,6 +16,7 @@ SUPPORTED_INPUT_SUFFIXES = {".jpg", ".jpeg", ".png", ".tif", ".tiff"}
 class StageInputReport:
     staged_dir: Path
     modified_files: list[str]
+    filename_map: dict[str, str] = field(default_factory=dict)
 
 
 def should_prefer_thumbnail_repair(report: StageInputReport) -> bool:
@@ -83,11 +84,51 @@ def _sanitize_dark_edge_artifacts(source: Path) -> tuple[np.ndarray | None, bool
     return sanitized, True
 
 
+def _stage_name(index: int, source: Path) -> str:
+    if source.name.isascii():
+        return source.name
+    return f"input_{index:04d}{source.suffix.lower()}"
+
+
+def restore_staged_name(name: str, filename_map: dict[str, str]) -> str:
+    if not filename_map:
+        return name
+    direct = filename_map.get(name)
+    if direct is not None:
+        return direct
+
+    for staged_name, original_name in filename_map.items():
+        staged_stem = Path(staged_name).stem
+        original_stem = Path(original_name).stem
+        if name == staged_stem:
+            return original_stem
+        if name.startswith(f"{staged_stem}_"):
+            return f"{original_stem}{name[len(staged_stem):]}"
+    return name
+
+
+def restore_output_filenames(output_dirs: list[Path], filename_map: dict[str, str]) -> None:
+    if not filename_map:
+        return
+
+    for output_dir in output_dirs:
+        if not output_dir.exists():
+            continue
+        for path in sorted(output_dir.iterdir()):
+            if not path.is_file():
+                continue
+            restored_name = restore_staged_name(path.name, filename_map)
+            if restored_name == path.name:
+                continue
+            path.rename(path.with_name(restored_name))
+
+
 def stage_input_images(input_dir: Path, staged_dir: Path) -> StageInputReport:
     staged_dir.mkdir(parents=True, exist_ok=True)
     modified_files: list[str] = []
+    filename_map: dict[str, str] = {}
 
-    for source in sorted(input_dir.iterdir()):
+    for index, source in enumerate(sorted(input_dir.iterdir()), start=1):
         if (
             not source.is_file()
             or source.name.startswith(".")
@@ -95,7 +136,9 @@ def stage_input_images(input_dir: Path, staged_dir: Path) -> StageInputReport:
         ):
             continue
 
-        destination = staged_dir / source.name
+        staged_name = _stage_name(index, source)
+        filename_map[staged_name] = source.name
+        destination = staged_dir / staged_name
         sanitized, changed = _sanitize_dark_edge_artifacts(source)
         if changed and sanitized is not None:
             Image.fromarray(sanitized, mode="RGB").save(destination)
@@ -103,4 +146,8 @@ def stage_input_images(input_dir: Path, staged_dir: Path) -> StageInputReport:
         else:
             shutil.copy2(source, destination)
 
-    return StageInputReport(staged_dir=staged_dir, modified_files=modified_files)
+    return StageInputReport(
+        staged_dir=staged_dir,
+        modified_files=modified_files,
+        filename_map=filename_map,
+    )

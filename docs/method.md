@@ -32,11 +32,24 @@ For user-facing outputs in `Thumbnails` mode, `leaf-measure` separates two repor
 
 This keeps the original Fiji particle table available for traceability while giving end users a one-thumbnail-one-row table by default.
 
+For `Full image`, the same split now exists when needed:
+
+- `results.csv`: the user-facing table after filtering an obviously oversized background particle from the final report
+- `results_fameles_particles_raw.csv`: the untouched Fiji measurement table
+
+This preserves published-method traceability while preventing a single background row from dominating the user-facing report.
+
 For setup, the repository now exposes two public helper commands:
 
 - `python -m engine.cli fetch-assets`: download the public Figshare macros and `Trial.zip`, then stage them into `.leaf-measure-assets/`
 - `python -m engine.cli fetch-fiji`: download the latest Fiji distribution into `fiji-latest-win64-jdk/`
 
 On Windows, `.\scripts\bootstrap.ps1` uses those commands automatically when the current machine is missing upstream assets or Fiji.
+
+Runtime discovery is intentionally conservative and shared between `doctor` and `analyze`:
+
+- `--fiji` may point to either a Fiji directory or a launcher such as `ImageJ-win64.exe`, `ImageJ.exe`, or `fiji-windows-x64.exe`
+- Fiji resolution order is: CLI path, environment variable, `config/runtime.toml`, `PATH`, common install locations, then the cached last-known-good launcher
+- non-ASCII input names are staged to ASCII-safe temporary names before Fiji runs and restored in final outputs
 
 For skill layout, `skills/leaf-measure/` is now the canonical source. The repo-local host copies under `.agents/skills/leaf-measure/` and `.claude/skills/leaf-measure/` are generated from that source via `python -m engine.cli sync-skills` or `.\scripts\sync-skills.ps1`.

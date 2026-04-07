@@ -10,7 +10,7 @@ from requests.adapters import HTTPAdapter
 from requests.exceptions import ChunkedEncodingError, ConnectionError as RequestsConnectionError
 from urllib3.util.retry import Retry
 
-from engine.executors import find_fiji_launcher
+from engine.fiji import resolve_fiji_installation
 
 
 FIGSHARE_ARTICLE_ID = "22354405"
@@ -179,11 +179,10 @@ def extract_fiji_archive(archive_path: Path, extract_root: Path) -> Path:
     for candidate in candidates:
         if not candidate.is_dir():
             continue
-        try:
-            find_fiji_launcher(candidate)
-        except FileNotFoundError:
+        resolved = resolve_fiji_installation(candidate)
+        if resolved is None:
             continue
-        return candidate.resolve()
+        return resolved.root_dir
     raise FileNotFoundError(f"Could not find a Fiji launcher after extracting {archive_path}")
 
 
@@ -195,15 +194,12 @@ def download_and_extract_fiji(
 ) -> Path:
     destination_root = destination_root.resolve()
     if destination_root.exists():
-        try:
-            find_fiji_launcher(destination_root / "Fiji")
-            return (destination_root / "Fiji").resolve()
-        except FileNotFoundError:
-            try:
-                find_fiji_launcher(destination_root)
-                return destination_root.resolve()
-            except FileNotFoundError:
-                pass
+        resolved = resolve_fiji_installation(destination_root / "Fiji")
+        if resolved is not None:
+            return resolved.root_dir
+        resolved = resolve_fiji_installation(destination_root)
+        if resolved is not None:
+            return resolved.root_dir
 
     session = session or build_http_session()
     with tempfile.TemporaryDirectory(prefix="leaf-measure-fiji-") as temp_dir_name:

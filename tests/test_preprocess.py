@@ -5,7 +5,12 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
-from engine.preprocess import StageInputReport, should_prefer_thumbnail_repair, stage_input_images
+from engine.preprocess import (
+    StageInputReport,
+    restore_staged_name,
+    should_prefer_thumbnail_repair,
+    stage_input_images,
+)
 
 
 def _write_rgb(path: Path, array: np.ndarray) -> None:
@@ -56,3 +61,21 @@ def test_should_prefer_thumbnail_repair_tracks_dark_edge_preflight() -> None:
     assert not should_prefer_thumbnail_repair(
         StageInputReport(staged_dir=Path("staged"), modified_files=[])
     )
+
+
+def test_stage_input_images_stages_non_ascii_names_to_ascii(tmp_path: Path) -> None:
+    input_dir = tmp_path / "input"
+    output_dir = tmp_path / "staged"
+    input_dir.mkdir()
+
+    image = np.full((12, 12, 3), 240, dtype=np.uint8)
+    source = input_dir / "阿尔泰狗娃花.tiff"
+    _write_rgb(source, image)
+
+    report = stage_input_images(input_dir, output_dir)
+
+    staged_files = sorted(path.name for path in output_dir.iterdir())
+    assert staged_files == ["input_0001.tiff"]
+    assert report.filename_map == {"input_0001.tiff": "阿尔泰狗娃花.tiff"}
+    assert restore_staged_name("input_0001.tiff", report.filename_map) == "阿尔泰狗娃花.tiff"
+    assert restore_staged_name("input_0001_01.png", report.filename_map) == "阿尔泰狗娃花_01.png"

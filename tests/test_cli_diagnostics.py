@@ -68,4 +68,5 @@ def test_analyze_missing_assets_writes_failure_report(
     failure_path = output_dir / "failure.json"
     assert failure_path.exists()
     payload = json.loads(failure_path.read_text(encoding="utf-8"))
-    assert payload["code"] in {"file_not_found", "analysis_failed"}
+    assert payload["code"] in {"missing_assets", "file_not_found", "analysis_failed"}
+    assert payload["stage"] in {"runtime_discovery", "input_validation", "analysis_execution"}

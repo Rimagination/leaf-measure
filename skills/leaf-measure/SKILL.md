@@ -20,6 +20,7 @@ This skill supports two host patterns:
    - repo-local: prefer `.\scripts\bootstrap.ps1` on Windows because it installs the current Python dependencies, downloads Fiji if missing, and fetches the public Figshare assets if missing
    - standalone installed skill: run `python scripts/setup_and_analyze.py analyze ...`; that helper clones or updates the shared repo cache, runs `doctor`, and bootstraps the runtime on first use when needed
    - if only the upstream package is missing in a repo-local workspace, run `python -m engine.cli fetch-assets`
+   - if you must pass Fiji explicitly, `--fiji` may be either a Fiji directory or a launcher path such as `ImageJ-win64.exe`
 4. Run the shared CLI from the repository root:
 
 ```powershell
@@ -48,10 +49,11 @@ python scripts/setup_and_analyze.py analyze --input "<folder>" --output "<run-di
 6. Explain:
    - what was measured
    - which mode was used
-   - that `results.csv` is the user-facing table and `results_fameles_particles_raw.csv` preserves the original particle-level table when present
+   - that `results.csv` is the user-facing table and `results_fameles_particles_raw.csv` preserves the original Fiji particle-level table when present
    - that outputs are in pixels by default
    - whether DPI metadata was found
    - whether automatic repair was triggered for a mask artifact
+   - whether leaf-measure internally staged non-ASCII filenames and then restored the original names in the delivered outputs
    - that binary and outline outputs should be visually reviewed
 
 ## References

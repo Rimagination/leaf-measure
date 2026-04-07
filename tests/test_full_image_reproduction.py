@@ -31,7 +31,7 @@ def test_full_image_reproduces_bundled_golden(
     assert (output_dir / "method_summary.md").exists()
     assert (output_dir / "trait_explanations.md").exists()
 
-    produced = pd.read_csv(output_dir / "results.csv")
+    produced = pd.read_csv(output_dir / "results_fameles_particles_raw.csv")
     golden = pd.read_csv(validation_assets_dir / "golden" / "full_image" / "results_full.csv")
     for frame in (produced, golden):
         drop_columns = [column for column in frame.columns if str(column).startswith("Unnamed:") or not str(column).strip()]
@@ -51,3 +51,5 @@ def test_full_image_reproduces_bundled_golden(
     manifest = (output_dir / "manifest.json").read_text(encoding="utf-8")
     assert '"mode": "full"' in manifest
     assert '"executor": "direct-fiji-batch"' in manifest
+    filtered = pd.read_csv(output_dir / "results.csv")
+    assert len(filtered) < len(produced)
